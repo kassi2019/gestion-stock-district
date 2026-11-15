@@ -148,6 +148,8 @@ export default {
     async rafraichir({ commit, state }) {
       if (!state.token) return
       const reponse = await http.get('/auth/moi')
+      // Déconnexion pendant l'appel : on ne réenregistre pas l'utilisateur
+      if (!state.token) return
       commit('SET_SESSION', { token: state.token, user: { ...state.user, ...reponse.data } })
     },
 

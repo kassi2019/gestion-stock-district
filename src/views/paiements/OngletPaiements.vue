@@ -120,7 +120,7 @@
             <tbody>
               <tr v-for="f in formulaire.factures" :key="f.id" :class="{ cible: f.id === formulaire.factureCible }">
                 <td class="code">{{ f.numero }}</td>
-                <td>{{ f.rapport ? periodeRapport(f.rapport) : '—' }}</td>
+                <td>{{ objetFacture(f) }}</td>
                 <td :class="{ retard: f.enRetard }">{{ f.dateEcheance ? formaterDate(f.dateEcheance) : '—' }}</td>
                 <td class="nombre">{{ formaterMontant(f.montantTotal) }}</td>
                 <td class="nombre">{{ formaterMontant(f.solde) }}</td>
@@ -199,7 +199,7 @@ import { confirmer, demanderTexte } from '@/utils/alertes'
 import { nomPersonne } from '@/utils/documentPdf'
 import { dateDuJour, formaterDate, formaterMontant } from '@/utils/format'
 import { annulerPaiement, creerPaiement, facturesNonSoldees, imputerPaiement, listerPaiements, trouverPaiement } from '@/api/facturation'
-import { MODES_PAIEMENT, options, periodeRapport, recuPdf } from '@/views/facturation/financesCommun'
+import { MODES_PAIEMENT, objetFacture, options, recuPdf } from '@/views/facturation/financesCommun'
 
 const props = defineProps({
   /** { centreId, factureId } : paiement d'une facture précise (depuis Facturation) */

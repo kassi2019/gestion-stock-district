@@ -35,6 +35,13 @@ export function periodeRapport(r) {
   return r ? `${MOIS[r.mois - 1]} ${r.annee}` : ''
 }
 
+/** Objet d'une facture : consommation d'un mois, ou écart de supervision. */
+export function objetFacture(f) {
+  if (f.rapport) return `Consommation de ${periodeRapport(f.rapport)}`
+  if (f.supervision) return `Écart de supervision ${f.supervision.numero}`
+  return f.type === 'ECART_SUPERVISION' ? 'Écart de supervision' : '—'
+}
+
 function encadreCentre(c) {
   return {
     titre: 'Centre de santé',
@@ -63,8 +70,8 @@ export function facturePdf(f) {
         lignes: [
           ["Date d'émission", formaterDate(f.dateEmission)],
           ['Échéance', f.dateEcheance ? formaterDate(f.dateEcheance) : ''],
-          ['Objet', f.rapport ? `Consommation de ${periodeRapport(f.rapport)}` : 'Facture'],
-          ['Rapport', f.rapport?.numero],
+          ['Objet', objetFacture(f)],
+          [f.supervision ? 'Supervision du' : 'Rapport', f.supervision ? formaterDate(f.supervision.dateSupervision) : f.rapport?.numero],
           ['Déjà payé', formaterMontant(f.montantPaye)],
           ['Reste à payer', formaterMontant(solde)],
         ],
@@ -80,7 +87,9 @@ export function facturePdf(f) {
     ],
     lignes: f.lignes,
     total: { libelle: 'MONTANT TOTAL À PAYER', valeur: formaterMontant(f.montantTotal) },
-    observations: f.statut === 'ANNULEE' ? `FACTURE ANNULÉE le ${formaterDate(f.dateAnnulation)} — motif : ${f.motifAnnulation}` : '',
+    observations: f.supervision && f.statut !== 'ANNULEE'
+      ? `Facture des produits manquants constatés lors de la supervision ${f.supervision.numero} du ${formaterDate(f.supervision.dateSupervision)} (écart validé).`
+      : f.statut === 'ANNULEE' ? `FACTURE ANNULÉE le ${formaterDate(f.dateAnnulation)} — motif : ${f.motifAnnulation}` : '',
     signatures: [
       { libelle: 'Le comptable / caissier', nom: nomPersonne(f.utilisateur) },
       { libelle: 'Le responsable du district', district: true },

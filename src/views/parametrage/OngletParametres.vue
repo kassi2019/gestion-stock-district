@@ -117,6 +117,12 @@
               :options="OUI_NON"
               :effacable="false"
             />
+            <ListeDeroulante
+              v-else-if="infos(parametre).type === 'choix'"
+              v-model="valeurs[parametre.cle]"
+              :options="infos(parametre).options"
+              :effacable="false"
+            />
             <input
               v-else-if="infos(parametre).type === 'nombre'"
               v-model="valeurs[parametre.cle]"
@@ -169,6 +175,14 @@ const DESCRIPTIONS = {
   PRIX_VENTE_PAR_CENTRE: { libelle: 'Prix de vente spécifiques par centre', type: 'ouiNon' },
   SORTIE_AUTO_PERIMES: { libelle: 'Sortie automatique des lots périmés (chaque nuit)', type: 'ouiNon' },
   DELAI_PAIEMENT_JOURS: { libelle: 'Délai de paiement des factures (jours après émission)', type: 'nombre' },
+  VALORISATION_ECARTS: {
+    libelle: 'Valorisation des écarts de supervision',
+    type: 'choix',
+    options: [
+      { id: 'PRIX_VENTE', libelle: 'Prix de vente (prix facturé au centre)' },
+      { id: 'PRIX_ACHAT', libelle: "Prix d'achat du district" },
+    ],
+  },
 }
 
 /** Choix proposés pour les paramètres de type oui/non. */

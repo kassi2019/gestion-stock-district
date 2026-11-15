@@ -59,7 +59,7 @@
             <td class="code">{{ f.numero }}</td>
             <td>{{ formaterDate(f.dateEmission) }}</td>
             <td><strong>{{ f.centre.nom }}</strong></td>
-            <td>{{ f.rapport ? `Consommation ${periodeRapport(f.rapport)}` : '—' }}</td>
+            <td>{{ objetFacture(f) }}</td>
             <td class="nombre">{{ formaterMontant(f.montantTotal) }}</td>
             <td class="nombre">{{ formaterMontant(f.montantPaye) }}</td>
             <td class="nombre"><strong :class="{ rouge: f.solde > 0 }">{{ formaterMontant(f.solde) }}</strong></td>
@@ -91,7 +91,7 @@
       <div class="fiche">
         <div><span>Émise le</span><strong>{{ formaterDate(detail.dateEmission) }}</strong></div>
         <div><span>Échéance</span><strong>{{ detail.dateEcheance ? formaterDate(detail.dateEcheance) : '—' }}</strong></div>
-        <div><span>Objet</span><strong>{{ detail.rapport ? `Consommation de ${periodeRapport(detail.rapport)} (${detail.rapport.numero})` : '—' }}</strong></div>
+        <div><span>Objet</span><strong>{{ objetFacture(detail) }}{{ detail.rapport ? ` (${detail.rapport.numero})` : '' }}</strong></div>
         <div><span>Établie par</span><strong>{{ nomPersonne(detail.utilisateur) }}</strong></div>
         <div><span>Montant</span><strong>{{ formaterMontant(detail.montantTotal) }}</strong></div>
         <div><span>Payé</span><strong>{{ formaterMontant(detail.montantPaye) }}</strong></div>
@@ -166,7 +166,7 @@ import { confirmer, demanderTexte } from '@/utils/alertes'
 import { nomPersonne } from '@/utils/documentPdf'
 import { formaterDate, formaterMontant, formaterNombre } from '@/utils/format'
 import { annulerFacture, imputerAvancesSurFacture, listerFactures, trouverFacture } from '@/api/facturation'
-import { facturePdf, MODES_PAIEMENT, options, periodeRapport, STATUTS_FACTURE } from './financesCommun'
+import { facturePdf, MODES_PAIEMENT, objetFacture, options, STATUTS_FACTURE } from './financesCommun'
 
 const props = defineProps({
   /** Ids des factures à mettre en avant / ouvrir (après génération) */
@@ -292,7 +292,7 @@ const VALEURS_TRI = {
   numero: (f) => f.numero,
   date: (f) => f.dateEmission,
   centre: (f) => f.centre.nom,
-  objet: (f) => (f.rapport ? f.rapport.annee * 100 + f.rapport.mois : null),
+  objet: (f) => objetFacture(f),
   montant: (f) => Number(f.montantTotal),
   paye: (f) => Number(f.montantPaye),
   solde: (f) => f.solde,
@@ -316,7 +316,7 @@ const COLONNES_PDF = [
   { titre: 'N° facture', valeur: (f) => f.numero },
   { titre: 'Émise le', valeur: (f) => formaterDate(f.dateEmission) },
   { titre: 'Centre', valeur: (f) => f.centre.nom },
-  { titre: 'Objet', valeur: (f) => (f.rapport ? periodeRapport(f.rapport) : '') },
+  { titre: 'Objet', valeur: (f) => objetFacture(f) },
   { titre: 'Statut', valeur: (f) => STATUTS_FACTURE[f.statut]?.libelle },
   { titre: 'Montant', valeur: (f) => formaterMontant(f.montantTotal), droite: true, somme: (f) => (f.statut === 'ANNULEE' ? 0 : Number(f.montantTotal)), formatTotal: formaterMontant },
   { titre: 'Payé', valeur: (f) => formaterMontant(f.montantPaye), droite: true, somme: (f) => (f.statut === 'ANNULEE' ? 0 : Number(f.montantPaye)), formatTotal: formaterMontant },

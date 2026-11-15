@@ -7,7 +7,11 @@
     1. Bandeau vert : salutation + 4 chiffres clés en pastilles blanches ;
     2. Grille de GRANDES tuiles en dégradé vert : TOUS les modules sont
        affichés ; ceux non attribués au profil sont GRISÉS (cadenas, non
-       cliquables). Badge = tâches en attente ;
+       cliquables). BADGES D'ALERTE sur chaque tuile :
+         - compteur rond en coin, couleur selon la gravité :
+           rouge = URGENT (clignote), orange = À TRAITER, bleu = INFORMATION ;
+         - liste des alertes en bas de la tuile (ex. « ⚠ 42 ruptures ») ;
+       + bandeau rouge des URGENCES sous la salutation ;
     3. ALERTES DE STOCK RÉELLES (pour les profils qui voient le module Stock) :
        bandeau rouge « lots périmés à retirer » + bande des alertes (périmés,
        péremption proche, ruptures / sous le seuil). Clic -> Stock > Alertes.
@@ -41,6 +45,14 @@
       </div>
     </section>
 
+    <!-- ======================= URGENCES (toutes tuiles confondues) ======================= -->
+    <section v-if="urgences.length" class="urgences" role="alert">
+      <span class="urgences-titre"><Icone nom="alerte" :taille="18" /> {{ urgences.length }} alerte(s) urgente(s)</span>
+      <router-link v-for="(u, i) in urgences" :key="i" :to="'/' + u.module" class="urgence">
+        <strong>{{ u.nombre }}</strong> {{ u.texte }} <small>— {{ titreModule(u.module) }}</small>
+      </router-link>
+    </section>
+
     <!-- ======================= 2. GRANDES TUILES ======================= -->
     <section class="grille">
       <!-- Module attribué : lien ; sinon simple bloc grisé (non cliquable) -->
@@ -63,15 +75,30 @@
           </div>
           <!-- Module non attribué : cadenas -->
           <span v-if="!module.autorise" class="tuile-verrou"><Icone nom="cadenas" :taille="14" /> Non attribué</span>
-          <!-- Badge : éléments en attente dans ce module (calculés par le serveur) -->
-          <span v-else-if="enAttente[module.code]" class="tuile-attente" :title="enAttente[module.code].libelle">
-            {{ enAttente[module.code].libelle }}
-          </span>
         </div>
+
+        <!-- BADGE D'ALERTE : compteur rond en coin (couleur = gravité la plus forte) -->
+        <span
+          v-if="module.autorise && enAttente[module.code]"
+          class="badge-alerte"
+          :class="'niveau-' + enAttente[module.code].niveau.toLowerCase()"
+          :title="enAttente[module.code].libelle"
+          :aria-label="`${NIVEAUX[enAttente[module.code].niveau].libelle} : ${enAttente[module.code].libelle}`"
+        >
+          {{ enAttente[module.code].nombre > 99 ? '99+' : enAttente[module.code].nombre }}
+        </span>
 
         <div class="tuile-bas">
           <div class="tuile-titre">{{ module.titre }}</div>
-          <div class="tuile-description">{{ module.description }}</div>
+          <!-- Alertes du module (3 au plus) ; sinon la description -->
+          <ul v-if="module.autorise && enAttente[module.code]" class="tuile-alertes">
+            <li v-for="a in enAttente[module.code].alertes.slice(0, 3)" :key="a.texte" :class="'niveau-' + a.niveau.toLowerCase()">
+              <span class="pastille">{{ NIVEAUX[a.niveau].symbole }}</span>
+              <strong>{{ a.nombre }}</strong> {{ a.texte }}
+            </li>
+            <li v-if="enAttente[module.code].alertes.length > 3" class="plus">+ {{ enAttente[module.code].alertes.length - 3 }} autre(s)…</li>
+          </ul>
+          <div v-else class="tuile-description">{{ module.description }}</div>
         </div>
       </component>
     </section>
@@ -140,6 +167,18 @@ const modulesAffiches = computed(() =>
 // ---------------------------------------------------------------------------
 const accueil = ref({ indicateurs: {}, enAttente: {} })
 const enAttente = computed(() => accueil.value.enAttente || {})
+/** Alertes URGENTES de toutes les tuiles (bandeau rouge). */
+const urgences = computed(() => accueil.value.urgences || [])
+
+/** Gravité des alertes : libellé (lecteurs d'écran) et symbole (jamais la couleur seule). */
+const NIVEAUX = {
+  URGENT: { libelle: 'Urgent', symbole: '!' },
+  ATTENTION: { libelle: 'À traiter', symbole: '•' },
+  INFO: { libelle: 'Information', symbole: 'i' },
+}
+function titreModule(code) {
+  return MODULES.find((m) => m.code === code)?.titre || code
+}
 
 /** Pastilles du bandeau : seulement celles renvoyées (modules visibles par l'utilisateur). */
 const indicateurs = computed(() => {
@@ -378,6 +417,98 @@ onMounted(async () => {
   background: rgba(255, 255, 255, 0.22);
   backdrop-filter: blur(2px);
 }
+/* ---------------------------------------------------------------------------
+   BADGES D'ALERTE
+   --------------------------------------------------------------------------- */
+/* Compteur rond en coin de tuile */
+.badge-alerte {
+  position: absolute;
+  top: 0.9rem;
+  right: 0.9rem;
+  z-index: 2;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 0.5rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 800;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+.badge-alerte.niveau-urgent { background: #dc2626; animation: pulsation 1.8s ease-out infinite; }
+.badge-alerte.niveau-attention { background: #ea7a0c; }
+.badge-alerte.niveau-info { background: #2a78d6; }
+/* Halo qui s'élargit : attire l'œil sur une urgence */
+@keyframes pulsation {
+  0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7), 0 4px 10px rgba(0, 0, 0, 0.25); }
+  70% { box-shadow: 0 0 0 12px rgba(220, 38, 38, 0), 0 4px 10px rgba(0, 0, 0, 0.25); }
+  100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0), 0 4px 10px rgba(0, 0, 0, 0.25); }
+}
+@media (prefers-reduced-motion: reduce) { .badge-alerte.niveau-urgent { animation: none; } }
+
+/* Liste des alertes en bas de la tuile : pastilles blanches lisibles sur le vert */
+.tuile-alertes { list-style: none; margin: 0.35rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.tuile-alertes li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.18rem 0.55rem 0.18rem 0.25rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #1f2937;
+  font-size: 0.74rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tuile-alertes li strong { font-weight: 800; }
+.tuile-alertes .pastille {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+.tuile-alertes .niveau-urgent .pastille { background: #dc2626; }
+.tuile-alertes .niveau-attention .pastille { background: #ea7a0c; }
+.tuile-alertes .niveau-info .pastille { background: #2a78d6; }
+.tuile-alertes .niveau-urgent { color: #991b1b; }
+.tuile-alertes li.plus { background: transparent; color: #fff; padding-left: 0.4rem; }
+
+/* Bandeau des urgences */
+.urgences {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.8rem 1.1rem;
+  border-radius: 14px;
+  background: #fdecec;
+  border: 1px solid #f5b5b5;
+}
+.urgences-titre { display: inline-flex; align-items: center; gap: 0.4rem; color: #b91c1c; font-weight: 800; }
+.urgence {
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  background: #fff;
+  color: #7f1d1d;
+  font-size: 0.85rem;
+  text-decoration: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.urgence:hover { background: #dc2626; color: #fff; }
+.urgence small { opacity: 0.75; }
+
 .tuile-attente {
   max-width: 62%;
   white-space: nowrap;

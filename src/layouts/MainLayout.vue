@@ -22,8 +22,8 @@
       <router-link to="/" class="logo" title="Retour à l'accueil">
         <div class="logo-croix">+</div>
         <div>
-          <div class="logo-titre">Stock <span>District</span></div>
-          <div class="logo-sous-titre">District sanitaire</div>
+          <div class="logo-titre">DISTOCK</div>
+          <div class="logo-sous-titre">Système de Gestion des Stocks des Districts Sanitaires (SGSDS)</div>
         </div>
       </router-link>
 
@@ -80,6 +80,7 @@ import { useRoute, useRouter } from 'vue-router'
 import Icone from '@/components/Icone.vue'
 import Avatar from '@/components/Avatar.vue'
 import MonMotDePasse from '@/components/MonMotDePasse.vue'
+import { utiliserDeconnexionAuto } from '@/utils/deconnexionAuto'
 
 const store = useStore()
 const router = useRouter()
@@ -102,6 +103,9 @@ function seDeconnecter() {
   store.dispatch('auth/logout')
   router.push({ name: 'login' })
 }
+
+// Déconnexion automatique après inactivité (délai : Paramètres généraux)
+utiliserDeconnexionAuto()
 
 // À l'ouverture : on relit l'utilisateur et ses DROITS auprès du serveur
 // (un changement de droits fait par l'administrateur s'applique sans reconnexion)
@@ -164,7 +168,7 @@ onMounted(() => store.dispatch('auth/rafraichir').catch(() => {}))
 }
 .logo-titre { font-size: 1.15rem; font-weight: 800; color: var(--primary-dark); }
 .logo-titre span { color: var(--accent-dark); }
-.logo-sous-titre { font-size: 0.72rem; color: var(--muted); }
+.logo-sous-titre { font-size: 0.72rem; color: var(--muted);font-weight: 600; line-height: 1.2rem; }
 
 /* Fil d'Ariane */
 .fil-ariane {

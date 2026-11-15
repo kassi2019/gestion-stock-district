@@ -95,6 +95,10 @@
 
         <!-- Message d'erreur (affiché seulement s'il y en a un) -->
         <p v-if="messageErreur" class="message-erreur">{{ messageErreur }}</p>
+        <!-- Retour après une déconnexion automatique (inactivité) -->
+        <p v-else-if="route.query.raison === 'inactivite'" class="message-info">
+          Vous avez été déconnecté automatiquement après une période d'inactivité. Reconnectez-vous pour continuer.
+        </p>
 
         <button type="submit" class="bouton-connexion" :disabled="enCours">
           {{ enCours ? 'Connexion en cours…' : 'Se connecter' }}
@@ -391,6 +395,14 @@ async function seConnecter() {
 }
 .bouton-oeil:hover { background: var(--primary-light); }
 
+.message-info {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  background: #fff4e5;
+  color: #8a5a00;
+  font-size: 0.85rem;
+}
 .message-erreur {
   margin: 0;
   padding: 0.65rem 0.85rem;

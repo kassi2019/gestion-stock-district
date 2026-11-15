@@ -126,6 +126,7 @@ export const GROUPES = [
         description: 'Contrôles physiques dans les centres et traitement des écarts',
         icone: 'loupe',
         couleur: 'principale',
+        vue: () => import('@/views/supervisions/SupervisionsView.vue'),
       },
       {
         code: 'rapports',
@@ -133,6 +134,7 @@ export const GROUPES = [
         description: 'Tableaux de bord, statistiques et exports PDF / Excel',
         icone: 'graphique',
         couleur: 'secondaire',
+        vue: () => import('@/views/rapports/RapportsView.vue'),
       },
     ],
   },
