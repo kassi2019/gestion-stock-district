@@ -92,6 +92,7 @@ export const GROUPES = [
         description: 'Saisie et validation des rapports de consommation',
         icone: 'presse-papier',
         couleur: 'secondaire',
+        vue: () => import('@/views/consommations/ConsommationsView.vue'),
       },
     ],
   },

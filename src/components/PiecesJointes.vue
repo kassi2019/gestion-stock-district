@@ -67,7 +67,7 @@ import { formaterDate } from '@/utils/format'
 import { ajouterPiece, listerPieces, ouvrirPiece, supprimerPiece } from '@/api/pieces'
 
 const props = defineProps({
-  /** Module : 'achats', 'stock' ou 'livraisons' (routes et droits du module) */
+  /** Module : 'achats', 'stock', 'livraisons' ou 'consommations' (routes et droits du module) */
   module: { type: String, default: 'achats' },
   /** Type de document : 'CommandeFournisseur', 'Reception', 'MouvementStock', 'CommandeCentre' ou 'Livraison' */
   type: { type: String, required: true },
@@ -82,6 +82,7 @@ const store = useStore()
 const TYPES_PIECES = {
   stock: ['Procès-verbal', 'Bordereau de transfert', 'Fiche de comptage', 'Constat de péremption', 'Autre'],
   livraisons: ['Bon de livraison signé', 'Demande du centre', 'Bordereau de transport', 'Autre'],
+  consommations: ['Rapport papier du centre', 'Fiche de vérification signée', 'Registre / fiche de stock du centre', 'Autre'],
   achats: ['Facture fournisseur', 'Bon de livraison', 'Bon de réception signé', 'Bon de commande signé', 'Autre'],
 }[props.module] || ['Autre']
 

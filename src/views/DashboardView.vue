@@ -5,16 +5,18 @@
   Page d'accueil très visuelle, façon "lanceur d'applications".
   Elle occupe toute la largeur de l'écran (pas de menu latéral) :
     1. Bandeau vert : salutation + 4 chiffres clés en pastilles blanches ;
-    2. Grille de GRANDES tuiles en dégradé vert (une par module autorisé),
-       avec une grande icône et le nombre de tâches en attente ;
+    2. Grille de GRANDES tuiles en dégradé vert : TOUS les modules sont
+       affichés ; ceux non attribués au profil sont GRISÉS (cadenas, non
+       cliquables). Badge = tâches en attente ;
     3. ALERTES DE STOCK RÉELLES (pour les profils qui voient le module Stock) :
        bandeau rouge « lots périmés à retirer » + bande des alertes (périmés,
        péremption proche, ruptures / sous le seuil). Clic -> Stock > Alertes.
 
-  Les tuiles sont générées depuis src/config/modules.js et filtrées selon
-  le profil connecté.
+  Les tuiles sont générées depuis src/config/modules.js ; le droit « Voir »
+  du profil connecté décide si la tuile est active ou grisée.
 
-  ⚠ Données d'exemple : src/config/donneesExemple.js (fictives).
+  Chiffres clés et badges : RÉELS, calculés par le serveur (GET /api/accueil/resume),
+  seulement pour les modules que l'utilisateur a le droit de voir.
   =============================================================================
 -->
 <template>
@@ -29,23 +31,26 @@
 
       <!-- Chiffres clés en pastilles -->
       <div class="chiffres">
-        <div v-for="indicateur in INDICATEURS" :key="indicateur.libelle" class="chiffre">
+        <router-link v-for="indicateur in indicateurs" :key="indicateur.libelle" :to="indicateur.lien" class="chiffre" :title="indicateur.detail">
           <div class="chiffre-valeur" :class="indicateur.couleur">
             {{ indicateur.valeur }} <small>{{ indicateur.unite }}</small>
           </div>
           <div class="chiffre-libelle">{{ indicateur.libelle }}</div>
-        </div>
+          <div v-if="indicateur.detail" class="chiffre-detail">{{ indicateur.detail }}</div>
+        </router-link>
       </div>
     </section>
 
     <!-- ======================= 2. GRANDES TUILES ======================= -->
     <section class="grille">
-      <router-link
-        v-for="(module, index) in modulesAutorises"
+      <!-- Module attribué : lien ; sinon simple bloc grisé (non cliquable) -->
+      <component
+        :is="module.autorise ? 'router-link' : 'div'"
+        v-for="(module, index) in modulesAffiches"
         :key="module.code"
-        :to="'/' + module.code"
+        v-bind="module.autorise ? { to: '/' + module.code } : { title: 'Module non attribué à votre profil' }"
         class="grande-tuile"
-        :class="'nuance-' + (index % 4)"
+        :class="module.autorise ? 'nuance-' + (index % 4) : 'grisee'"
       >
         <!-- Grande icône en filigrane (décor) -->
         <Icone :nom="module.icone" :taille="120" class="filigrane" />
@@ -56,8 +61,11 @@
             <!-- Numéro d'ordre : 01, 02, 03... (ordre de src/config/modules.js) -->
             <span class="tuile-numero">{{ String(index + 1).padStart(2, '0') }}</span>
           </div>
-          <span v-if="EN_ATTENTE[module.code]" class="tuile-attente">
-            {{ EN_ATTENTE[module.code] }} en attente
+          <!-- Module non attribué : cadenas -->
+          <span v-if="!module.autorise" class="tuile-verrou"><Icone nom="cadenas" :taille="14" /> Non attribué</span>
+          <!-- Badge : éléments en attente dans ce module (calculés par le serveur) -->
+          <span v-else-if="enAttente[module.code]" class="tuile-attente" :title="enAttente[module.code].libelle">
+            {{ enAttente[module.code].libelle }}
           </span>
         </div>
 
@@ -65,7 +73,7 @@
           <div class="tuile-titre">{{ module.titre }}</div>
           <div class="tuile-description">{{ module.description }}</div>
         </div>
-      </router-link>
+      </component>
     </section>
 
     <!-- ======================= 3. ALERTES DE STOCK (réelles) ======================= -->
@@ -106,9 +114,9 @@ import { computed, onMounted, ref } from 'vue'
 import { useStore } from 'vuex'
 import Icone from '@/components/Icone.vue'
 import { MODULES } from '@/config/modules'
-import { INDICATEURS, EN_ATTENTE } from '@/config/donneesExemple'
 import { resumeAlertes } from '@/api/stock'
-import { formaterDate } from '@/utils/format'
+import { resumeAccueil } from '@/api/accueil'
+import { formaterDate, formaterNombre } from '@/utils/format'
 
 const store = useStore()
 const utilisateur = computed(() => store.state.auth.user)
@@ -121,10 +129,74 @@ const dateDuJour = new Date().toLocaleDateString('fr-FR', {
   year: 'numeric',
 })
 
-// Modules autorisés pour le profil connecté
-const modulesAutorises = computed(() =>
-  MODULES.filter((module) => store.getters['auth/peutVoir'](module.code)),
+// Tous les modules, avec « autorise » = le profil connecté a le droit de les voir
+// (les autres sont affichés grisés)
+const modulesAffiches = computed(() =>
+  MODULES.map((module) => ({ ...module, autorise: store.getters['auth/peutVoir'](module.code) })),
 )
+
+// ---------------------------------------------------------------------------
+// CHIFFRES CLÉS ET BADGES DES TUILES (réels, calculés par le serveur)
+// ---------------------------------------------------------------------------
+const accueil = ref({ indicateurs: {}, enAttente: {} })
+const enAttente = computed(() => accueil.value.enAttente || {})
+
+/** Pastilles du bandeau : seulement celles renvoyées (modules visibles par l'utilisateur). */
+const indicateurs = computed(() => {
+  const i = accueil.value.indicateurs || {}
+  const liste = []
+  if (i.stock) {
+    liste.push({
+      libelle: 'Valeur du stock dépôt',
+      valeur: formaterNombre(Math.round(i.stock.valeurAchat)),
+      unite: 'FCFA',
+      detail: `Au prix d'achat · ${formaterNombre(Math.round(i.stock.valeurVente))} FCFA au prix de vente`,
+      couleur: '',
+      lien: '/stock',
+    })
+  }
+  if (i.alertes) {
+    const a = i.alertes
+    liste.push({
+      libelle: 'Alertes stock',
+      valeur: formaterNombre(a.total),
+      unite: a.total > 1 ? 'alertes' : 'alerte',
+      detail: [
+        a.ruptures && `${a.ruptures} rupture(s)`,
+        a.sousSeuil && `${a.sousSeuil} sous le seuil`,
+        a.lotsPerimes && `${a.lotsPerimes} lot(s) périmé(s)`,
+        a.lotsProches && `${a.lotsProches} lot(s) ≤ ${a.delai} j`,
+      ]
+        .filter(Boolean)
+        .join(' · ') || 'Aucune alerte',
+      couleur: a.total > 0 ? 'rouge' : '',
+      lien: '/stock?onglet=alertes',
+    })
+  }
+  if (i.creances) {
+    const c = i.creances
+    liste.push({
+      libelle: 'Créances en cours',
+      valeur: formaterNombre(Math.round(c.montant)),
+      unite: 'FCFA',
+      detail: c.factures ? `${c.factures} facture(s) non soldée(s) · ${c.centres} centre(s)` : 'Aucune facture impayée',
+      couleur: c.montant > 0 ? 'rouge' : '',
+      lien: '/paiements',
+    })
+  }
+  if (i.rapports) {
+    const r = i.rapports
+    liste.push({
+      libelle: 'Rapports à valider',
+      valeur: formaterNombre(r.aValider),
+      unite: r.aValider > 1 ? 'rapports' : 'rapport',
+      detail: r.aValider ? `${formaterNombre(Math.round(r.montant))} FCFA de consommation` : r.brouillons ? `${r.brouillons} brouillon(s) en cours` : 'Rien en attente',
+      couleur: '',
+      lien: '/consommations',
+    })
+  }
+  return liste
+})
 
 // ---------------------------------------------------------------------------
 // ALERTES DE STOCK RÉELLES (seulement si le profil voit le module Stock)
@@ -155,6 +227,11 @@ const alertesStock = computed(() => {
 })
 
 onMounted(async () => {
+  try {
+    accueil.value = await resumeAccueil()
+  } catch {
+    // Pas bloquant : l'accueil s'affiche sans les chiffres
+  }
   if (!store.getters['auth/peutVoir']('stock')) return
   try {
     resume.value = await resumeAlertes()
@@ -190,6 +267,9 @@ onMounted(async () => {
 
 .chiffres { display: flex; flex-wrap: wrap; gap: 0.75rem; }
 .chiffre {
+  display: block;
+  text-decoration: none;
+  transition: transform 0.15s;
   min-width: 150px;
   padding: 0.85rem 1rem;
   border-radius: 12px;
@@ -201,6 +281,9 @@ onMounted(async () => {
 .chiffre-valeur.rouge { color: var(--danger); }
 .chiffre-valeur small { font-size: 0.7rem; font-weight: 600; color: var(--muted); }
 .chiffre-libelle { font-size: 0.75rem; color: var(--muted); }
+.chiffre:hover { transform: translateY(-2px); }
+/* Détail (ex. « 3 ruptures · 2 lots ≤ 90 j ») */
+.chiffre-detail { margin-top: 0.15rem; max-width: 210px; font-size: 0.68rem; color: var(--muted); opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---------------------------------------------------------------------------
    2. GRANDES TUILES (4 nuances de vert en alternance)
@@ -244,6 +327,29 @@ onMounted(async () => {
 .nuance-2 { background: linear-gradient(135deg, #1f8f6a, #0f5e44); }
 .nuance-3 { background: linear-gradient(135deg, #37b07a, #1d7f55); }
 
+/* Module NON attribué au profil : gris, sans effet au survol, non cliquable */
+.grande-tuile.grisee {
+  background: linear-gradient(135deg, #c9cfd4, #a7afb6);
+  color: #f4f6f7;
+  box-shadow: none;
+  cursor: not-allowed;
+  filter: saturate(0.2);
+  opacity: 0.75;
+}
+.grande-tuile.grisee:hover { transform: none; box-shadow: none; }
+.grande-tuile.grisee:hover .filigrane { transform: none; }
+.tuile-verrou {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.35);
+  color: #4b5563;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
 /* Grande icône en filigrane, en bas à droite */
 .filigrane {
   position: absolute;
@@ -273,6 +379,10 @@ onMounted(async () => {
   backdrop-filter: blur(2px);
 }
 .tuile-attente {
+  max-width: 62%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 0.3rem 0.7rem;
   border-radius: 999px;
   background: #fff;

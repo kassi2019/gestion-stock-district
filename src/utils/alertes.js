@@ -88,3 +88,29 @@ export async function confirmer({ titre, texte = '', boutonConfirmer = 'Oui, con
   })
   return resultat.isConfirmed
 }
+
+/**
+ * Demande un TEXTE à l'utilisateur (ex. motif d'un renvoi).
+ * Renvoie le texte saisi, ou null si l'utilisateur annule.
+ *
+ *     const motif = await demanderTexte({ titre: 'Renvoyer le rapport ?', libelle: 'Motif du renvoi' })
+ *     if (motif === null) return
+ */
+export async function demanderTexte({ titre, texte = '', libelle = '', boutonConfirmer = 'Valider', obligatoire = true }) {
+  const resultat = await Swal.fire({
+    title: titre,
+    text: texte,
+    input: 'textarea',
+    inputLabel: libelle,
+    inputAttributes: { maxlength: '500' },
+    showCancelButton: true,
+    confirmButtonText: boutonConfirmer,
+    cancelButtonText: 'Annuler',
+    confirmButtonColor: VERT,
+    cancelButtonColor: GRIS,
+    reverseButtons: true,
+    allowOutsideClick: false,
+    inputValidator: (valeur) => (obligatoire && !valeur.trim() ? 'Ce champ est obligatoire.' : undefined),
+  })
+  return resultat.isConfirmed ? resultat.value.trim() : null
+}
