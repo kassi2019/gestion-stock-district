@@ -14,6 +14,7 @@
 
   - "titre"  : texte affiché en haut ;
   - "large"  : fenêtre plus large (pour les gros formulaires / tableaux) ;
+  - "tres-large" : encore plus large (documents avec beaucoup de colonnes) ;
   - @fermer  : émis quand l'utilisateur clique sur la croix ×.
 
   ⚠ Volontairement, la fenêtre NE se ferme PAS toute seule :
@@ -26,7 +27,7 @@
 -->
 <template>
   <div class="fond">
-    <div class="fenetre" :class="{ large }" role="dialog" aria-modal="true">
+    <div class="fenetre" :class="{ large, 'tres-large': tresLarge }" role="dialog" aria-modal="true">
       <header class="entete">
         <h3>{{ titre }}</h3>
         <button class="fermer" title="Fermer" @click="emit('fermer')">×</button>
@@ -48,6 +49,8 @@
 defineProps({
   titre: { type: String, default: '' },
   large: { type: Boolean, default: false },
+  /** Fenêtre encore plus large (documents avec beaucoup de colonnes : commandes, réceptions) */
+  tresLarge: { type: Boolean, default: false },
 })
 const emit = defineEmits(['fermer'])
 </script>
@@ -75,6 +78,7 @@ const emit = defineEmits(['fermer'])
   overflow: hidden;
 }
 .fenetre.large { max-width: 900px; }
+.fenetre.tres-large { max-width: 1200px; }
 
 .entete {
   display: flex;

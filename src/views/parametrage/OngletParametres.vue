@@ -167,6 +167,7 @@ const DESCRIPTIONS = {
   SESSION_EXPIRATION_MINUTES: { libelle: 'Déconnexion après inactivité (minutes)', type: 'nombre' },
   ALERTE_PEREMPTION_JOURS: { libelle: 'Alerte de péremption (jours avant)', type: 'nombre' },
   PRIX_VENTE_PAR_CENTRE: { libelle: 'Prix de vente spécifiques par centre', type: 'ouiNon' },
+  SORTIE_AUTO_PERIMES: { libelle: 'Sortie automatique des lots périmés (chaque nuit)', type: 'ouiNon' },
 }
 
 /** Choix proposés pour les paramètres de type oui/non. */

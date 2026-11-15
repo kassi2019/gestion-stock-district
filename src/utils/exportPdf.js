@@ -49,7 +49,7 @@ const GRIS = [107, 114, 128]
  * (ex. l'espace des milliers « 12 500 » produit par toLocaleString) : on les
  * remplace par des espaces normaux, sinon des caractères bizarres apparaissent.
  */
-function nettoyerTexte(valeur) {
+export function nettoyerTexte(valeur) {
   if (valeur === null || valeur === undefined || valeur === '') return '—'
   return String(valeur).replace(/[\u00a0\u202f\u2009]/g, ' ')
 }
@@ -59,7 +59,7 @@ function nettoyerTexte(valeur) {
  *   { nom: 'District sanitaire...', contact: 'Abobo · Tél. 27 22... · ds@...' }
  * Valeurs par défaut si les paramètres sont indisponibles.
  */
-async function infosDistrict() {
+export async function infosDistrict() {
   try {
     const parametres = await listerParametres()
     const valeur = (cle) => (parametres.find((p) => p.cle === cle)?.valeur || '').trim()

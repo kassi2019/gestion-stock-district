@@ -7,7 +7,9 @@
     1. Bandeau vert : salutation + 4 chiffres clés en pastilles blanches ;
     2. Grille de GRANDES tuiles en dégradé vert (une par module autorisé),
        avec une grande icône et le nombre de tâches en attente ;
-    3. Bande d'alertes en bas (défilement horizontal).
+    3. ALERTES DE STOCK RÉELLES (pour les profils qui voient le module Stock) :
+       bandeau rouge « lots périmés à retirer » + bande des alertes (périmés,
+       péremption proche, ruptures / sous le seuil). Clic -> Stock > Alertes.
 
   Les tuiles sont générées depuis src/config/modules.js et filtrées selon
   le profil connecté.
@@ -66,25 +68,47 @@
       </router-link>
     </section>
 
-    <!-- ======================= 3. BANDE D'ALERTES ======================= -->
-    <section class="alertes">
-      <div class="alertes-titre"><Icone nom="alerte" :taille="18" /> Alertes stock</div>
-      <div class="alertes-liste">
-        <div v-for="alerte in ALERTES" :key="alerte.produit" class="alerte" :class="alerte.couleur">
-          <strong>{{ alerte.produit }}</strong>
-          <span>{{ alerte.detail }}</span>
+    <!-- ======================= 3. ALERTES DE STOCK (réelles) ======================= -->
+    <template v-if="resume">
+      <!-- Bandeau rouge : lots périmés à retirer -->
+      <router-link v-if="resume.lotsPerimes > 0" to="/stock?onglet=alertes" class="bandeau-perimes">
+        <Icone nom="alerte" :taille="22" />
+        <span>
+          <strong>{{ resume.lotsPerimes }} lot(s) périmé(s) à retirer du stock</strong>
+          ({{ resume.quantitePerimee }} unité(s)) — cliquez pour les sortir du stock.
+        </span>
+        <Icone nom="fleche" :taille="18" />
+      </router-link>
+
+      <section class="alertes">
+        <router-link to="/stock?onglet=alertes" class="alertes-titre">
+          <Icone nom="alerte" :taille="18" /> Alertes stock
+          <span class="compteurs-alertes">
+            <span v-if="resume.ruptures" class="c-rouge">{{ resume.ruptures }} rupture(s)</span>
+            <span v-if="resume.sousSeuil" class="c-orange">{{ resume.sousSeuil }} sous le seuil</span>
+            <span v-if="resume.lotsProches" class="c-orange">{{ resume.lotsProches }} lot(s) ≤ {{ resume.delai }} j</span>
+          </span>
+        </router-link>
+        <div class="alertes-liste">
+          <router-link v-for="(alerte, i) in alertesStock" :key="i" to="/stock?onglet=alertes" class="alerte" :class="alerte.couleur">
+            <strong>{{ alerte.produit }}</strong>
+            <span>{{ alerte.detail }}</span>
+          </router-link>
+          <span v-if="alertesStock.length === 0" class="aucune-alerte">✔ Aucune alerte de stock.</span>
         </div>
-      </div>
-    </section>
+      </section>
+    </template>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useStore } from 'vuex'
 import Icone from '@/components/Icone.vue'
 import { MODULES } from '@/config/modules'
-import { INDICATEURS, EN_ATTENTE, ALERTES } from '@/config/donneesExemple'
+import { INDICATEURS, EN_ATTENTE } from '@/config/donneesExemple'
+import { resumeAlertes } from '@/api/stock'
+import { formaterDate } from '@/utils/format'
 
 const store = useStore()
 const utilisateur = computed(() => store.state.auth.user)
@@ -101,6 +125,43 @@ const dateDuJour = new Date().toLocaleDateString('fr-FR', {
 const modulesAutorises = computed(() =>
   MODULES.filter((module) => store.getters['auth/peutVoir'](module.code)),
 )
+
+// ---------------------------------------------------------------------------
+// ALERTES DE STOCK RÉELLES (seulement si le profil voit le module Stock)
+// ---------------------------------------------------------------------------
+const resume = ref(null)
+
+/** Cartes de la bande d'alertes : périmés (rouge), ruptures / sous le seuil, péremption proche. */
+const alertesStock = computed(() => {
+  if (!resume.value) return []
+  const r = resume.value
+  return [
+    ...r.exemplesPerimes.map((l) => ({
+      produit: l.designation,
+      detail: `Lot ${l.numeroLot} · PÉRIMÉ depuis le ${formaterDate(l.datePeremption)} · ${l.quantite} en stock`,
+      couleur: 'rouge',
+    })),
+    ...r.exemplesRuptures.map((m) => ({
+      produit: m.designation,
+      detail: m.stock <= 0 ? 'Rupture de stock' : `Stock : ${m.stock} / seuil : ${m.seuilAlerte}`,
+      couleur: m.stock <= 0 ? 'rouge' : 'secondaire',
+    })),
+    ...r.exemplesProches.map((l) => ({
+      produit: l.designation,
+      detail: `Lot ${l.numeroLot} · expire le ${formaterDate(l.datePeremption)} · ${l.quantite} en stock`,
+      couleur: 'secondaire',
+    })),
+  ]
+})
+
+onMounted(async () => {
+  if (!store.getters['auth/peutVoir']('stock')) return
+  try {
+    resume.value = await resumeAlertes()
+  } catch {
+    // Pas bloquant : l'accueil s'affiche sans les alertes
+  }
+})
 </script>
 
 <style scoped>
@@ -259,6 +320,29 @@ const modulesAutorises = computed(() =>
   font-size: 0.8rem;
 }
 .alerte.rouge { border-left-color: var(--danger); background: #fdecec; }
+a.alerte { color: inherit; text-decoration: none; }
+a.alerte:hover { filter: brightness(0.97); }
+a.alertes-titre { text-decoration: none; }
+.compteurs-alertes { display: inline-flex; gap: 0.35rem; margin-left: 0.4rem; }
+.compteurs-alertes span { padding: 0.05rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+.c-rouge { background: #fdecec; color: var(--danger); }
+.c-orange { background: #fff1e0; color: #b35c00; }
+.aucune-alerte { align-self: center; font-size: 0.85rem; color: var(--primary-dark); }
+
+/* Bandeau rouge « lots périmés à retirer » */
+.bandeau-perimes {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.9rem 1.25rem;
+  border-radius: 14px;
+  background: linear-gradient(120deg, #dc2626, #b91c1c);
+  color: #fff;
+  text-decoration: none;
+  box-shadow: 0 8px 20px rgba(185, 28, 28, 0.3);
+}
+.bandeau-perimes span { flex: 1; }
+.bandeau-perimes:hover { filter: brightness(1.05); }
 .alerte span { color: var(--muted); }
 
 /* ---------------------------------------------------------------------------

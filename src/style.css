@@ -175,6 +175,8 @@ input:focus, select:focus, textarea:focus {
 .badge-vert { background: var(--primary-light); color: var(--primary-dark); }
 .badge-gris { background: #eef0f2; color: var(--muted); }
 .badge-rouge { background: #fdecec; color: var(--danger); }
+.badge-bleu { background: #e8f1fd; color: #1d4f91; }
+.badge-orange { background: #fff1e0; color: #b35c00; }
 
 /* Code (ex. MED-001) en police à chasse fixe */
 .code { font-family: Consolas, 'Courier New', monospace; font-size: 0.85rem; color: var(--primary-dark); }

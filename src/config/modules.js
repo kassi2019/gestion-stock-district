@@ -63,6 +63,7 @@ export const GROUPES = [
         description: 'Commandes fournisseurs, réceptions, lots et péremptions',
         icone: 'panier',
         couleur: 'principale',
+        vue: () => import('@/views/achats/AchatsView.vue'),
       },
       {
         code: 'stock',
@@ -70,6 +71,7 @@ export const GROUPES = [
         description: 'Stock disponible, mouvements, ajustements et inventaires',
         icone: 'carton',
         couleur: 'secondaire',
+        vue: () => import('@/views/stock/StockView.vue'),
       },
     ],
   },
