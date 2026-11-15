@@ -6,7 +6,7 @@
  *   - BON DE COMMANDE et BON DE RÉCEPTION en PDF (documents officiels).
  * =============================================================================
  */
-import { exporterDocumentPdf } from '@/utils/documentPdf'
+import { exporterDocumentPdf, nomPersonne } from '@/utils/documentPdf'
 import { formaterDate, formaterMontant, formaterNombre } from '@/utils/format'
 
 /** Statuts d'une commande fournisseur. */
@@ -31,9 +31,6 @@ export function optionsStatuts(statuts) {
 }
 
 /** Nom complet d'une personne (ex. « Awa BAMBA »). */
-function nomPersonne(p) {
-  return p ? `${p.prenoms || ''} ${p.nom || ''}`.trim() : ''
-}
 
 /** Désignation complète d'un médicament (ex. « PARA500 — Paracétamol 500 mg »). */
 function designation(m) {
@@ -79,7 +76,10 @@ export function bonDeCommandePdf(commande) {
     lignes: commande.lignes,
     total: { libelle: 'MONTANT TOTAL DE LA COMMANDE', valeur: formaterMontant(commande.montantTotal) },
     observations: commande.observations,
-    signatures: ['Le gestionnaire du dépôt', 'Le responsable du district'],
+    signatures: [
+      { libelle: 'Le gestionnaire du dépôt', nom: nomPersonne(commande.validateur) || nomPersonne(commande.utilisateur) },
+      { libelle: 'Le responsable du district', district: true },
+    ],
     nomFichier: `bon_commande_${commande.numero}`,
   })
 }
@@ -125,7 +125,10 @@ export function bonDeReceptionPdf(reception) {
     lignes: reception.lignes,
     total: { libelle: 'MONTANT TOTAL REÇU', valeur: formaterMontant(reception.montantTotal) },
     observations: reception.observations,
-    signatures: ['Le livreur (fournisseur)', 'Le gestionnaire du dépôt'],
+    signatures: [
+      'Le livreur (fournisseur)', // personne qui livre : inconnue du système, nom à écrire à la main
+      { libelle: 'Le gestionnaire du dépôt', nom: nomPersonne(reception.validateur) || nomPersonne(reception.utilisateur) },
+    ],
     nomFichier: `bon_reception_${reception.numero}`,
   })
 }

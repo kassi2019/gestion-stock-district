@@ -23,12 +23,27 @@
  *       lignes,
  *       total: { libelle: 'MONTANT TOTAL', valeur: '125 000 FCFA' },
  *       observations: '...',
- *       signatures: ['Le gestionnaire du dépôt', 'Le responsable du district'],
+ *       signatures: [
+ *         { libelle: 'Le gestionnaire du dépôt', nom: 'Awa KONÉ' },  // nom écrit automatiquement
+ *         { libelle: 'Le responsable du district', district: true },  // nom pris dans Paramètres généraux
+ *         'Le livreur',                                               // texte seul : nom à écrire à la main
+ *       ],
  *       nomFichier: 'bon_commande_BCF-2026-00001',
  *     })
  * =============================================================================
  */
+import store from '@/store'
 import { infosDistrict, nettoyerTexte } from '@/utils/exportPdf'
+
+/** « Prénoms NOM » d'une personne ({ nom, prenoms }), ou '' si inconnue. */
+export function nomPersonne(p) {
+  return p ? `${p.prenoms || ''} ${p.nom || ''}`.trim() : ''
+}
+
+/** Nom de l'utilisateur connecté (celui qui imprime le document). */
+export function nomUtilisateurConnecte() {
+  return nomPersonne(store.state.auth.user)
+}
 
 const VERT = [0, 163, 108]
 const VERT_FONCE = [0, 122, 80]
@@ -100,31 +115,43 @@ export async function exporterDocumentPdf({
   if (encadres.length) {
     const espace = 6
     const largeurEncadre = (largeur - 2 * marge - espace * (encadres.length - 1)) / encadres.length
-    let hauteurMax = 0
-    encadres.forEach((encadre, index) => {
-      const x = marge + index * (largeurEncadre + espace)
-      const lignesInfo = encadre.lignes.filter(([, valeur]) => valeur !== null && valeur !== undefined && valeur !== '')
-      const hauteurEncadre = 9 + lignesInfo.length * 5.2 + 2
-      hauteurMax = Math.max(hauteurMax, hauteurEncadre)
+    const INTERLIGNE = 3.8 // hauteur d'une ligne de texte supplémentaire (valeur longue)
+    const ECART_LIGNES = 5.2 // écart entre deux informations
+    // 1) Préparation : chaque valeur est découpée en plusieurs lignes si elle est
+    //    trop longue (ex. nom complet du centre), pour qu'elle sorte EN ENTIER.
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8.5)
+    const blocs = encadres.map((encadre) => {
+      const infos = encadre.lignes
+        .filter(([, valeur]) => valeur !== null && valeur !== undefined && valeur !== '')
+        .map(([libelle, valeur]) => ({ libelle, morceaux: doc.splitTextToSize(nettoyerTexte(valeur), largeurEncadre - 40) }))
+      const hauteur = 9 + infos.reduce((t, info) => t + ECART_LIGNES + (info.morceaux.length - 1) * INTERLIGNE, 0) + 2
+      return { encadre, infos, hauteur }
+    })
+    // Tous les encadrés ont la même hauteur (celle du plus haut) : rendu aligné
+    const hauteurMax = Math.max(...blocs.map((b) => b.hauteur))
 
+    // 2) Dessin
+    blocs.forEach(({ encadre, infos }, index) => {
+      const x = marge + index * (largeurEncadre + espace)
       doc.setFillColor(...VERT_PALE)
       doc.setDrawColor(208, 232, 219)
-      doc.roundedRect(x, y, largeurEncadre, hauteurEncadre, 2, 2, 'FD')
+      doc.roundedRect(x, y, largeurEncadre, hauteurMax, 2, 2, 'FD')
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(9)
       doc.setTextColor(...VERT_FONCE)
       doc.text(nettoyerTexte(encadre.titre).toUpperCase(), x + 4, y + 6)
 
       doc.setFontSize(8.5)
-      lignesInfo.forEach(([libelle, valeur], i) => {
-        const yLigne = y + 12 + i * 5.2
+      let yLigne = y + 12
+      infos.forEach(({ libelle, morceaux }) => {
         doc.setFont('helvetica', 'normal')
         doc.setTextColor(...GRIS)
         doc.text(nettoyerTexte(libelle), x + 4, yLigne)
         doc.setTextColor(...TEXTE)
         doc.setFont('helvetica', 'bold')
-        const texte = doc.splitTextToSize(nettoyerTexte(valeur), largeurEncadre - 40)[0]
-        doc.text(texte, x + 36, yLigne)
+        doc.text(morceaux, x + 36, yLigne, { lineHeightFactor: INTERLIGNE / (8.5 * 0.3528) })
+        yLigne += ECART_LIGNES + (morceaux.length - 1) * INTERLIGNE
       })
     })
     y += hauteurMax + 6
@@ -210,16 +237,34 @@ export async function exporterDocumentPdf({
       y = 20
     }
     const largeurSignature = (largeur - 2 * marge) / signatures.length
-    signatures.forEach((libelle, i) => {
+    signatures.forEach((signature, i) => {
+      // Une signature est un texte (libellé seul) ou { libelle, nom?, district? }
+      const { libelle, nom: nomSaisi = '', district: duDistrict = false } =
+        typeof signature === 'string' ? { libelle: signature } : signature
+      const nom = (duDistrict ? district.responsable : nomSaisi) || ''
       const x = marge + i * largeurSignature
+      const centre = x + largeurSignature / 2
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(9)
       doc.setTextColor(...TEXTE)
-      doc.text(nettoyerTexte(libelle), x + largeurSignature / 2, y + 4, { align: 'center' })
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(7.5)
-      doc.setTextColor(...GRIS)
-      doc.text('Nom, date et signature', x + largeurSignature / 2, y + 9, { align: 'center' })
+      doc.text(nettoyerTexte(libelle), centre, y + 4, { align: 'center' })
+      if (nom) {
+        // Nom de l'acteur écrit automatiquement (2 lignes au plus)
+        doc.setFontSize(8.5)
+        doc.setTextColor(...VERT_FONCE)
+        const lignesNom = doc.splitTextToSize(nettoyerTexte(nom), largeurSignature - 6).slice(0, 2)
+        doc.text(lignesNom, centre, y + 9, { align: 'center' })
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(7.5)
+        doc.setTextColor(...GRIS)
+        doc.text('Date et signature', centre, y + 10 + lignesNom.length * 3.6, { align: 'center' })
+      } else {
+        // Pas de nom connu : à écrire à la main
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(7.5)
+        doc.setTextColor(...GRIS)
+        doc.text('Nom, date et signature', centre, y + 9, { align: 'center' })
+      }
       doc.setDrawColor(200, 200, 200)
       doc.line(x + 8, y + 30, x + largeurSignature - 8, y + 30)
     })

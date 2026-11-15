@@ -84,6 +84,7 @@ export const GROUPES = [
         description: 'Commandes des centres, préparation et bons de livraison',
         icone: 'camion',
         couleur: 'principale',
+        vue: () => import('@/views/livraisons/LivraisonsView.vue'),
       },
       {
         code: 'consommations',

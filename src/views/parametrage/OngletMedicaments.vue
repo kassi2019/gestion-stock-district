@@ -169,6 +169,11 @@
 
         <!-- ---------- Stock ---------- -->
         <h4 class="section pleine-largeur">Stock</h4>
+        <div>
+          <label>Seuil d'alerte ({{ libelleUniteVente(formulaire.uniteVenteId).toLowerCase() || 'unités' }})</label>
+          <input v-model="formulaire.seuilAlerte" type="number" min="0" step="1" placeholder="0" />
+          <small class="aide">Stock minimum au dépôt : en dessous, le médicament est signalé « sous le seuil ». 0 = pas d'alerte.</small>
+        </div>
         <!-- Création : stock initial du dépôt -->
         <template v-if="!formulaire.id">
           <div>
@@ -316,9 +321,9 @@ async function enregistrer() {
         formeId: f.formeId,
         dosage: f.dosage,
         familleId: f.familleId,
-        // Unité de dispensation, conditionnement, seuil d'alerte et suivi par lot ne sont
-        // plus dans le formulaire : valeurs par défaut à la création (unité, 0, Oui),
-        // valeurs déjà enregistrées conservées en modification (modifiables par l'import).
+        // Unité de dispensation, conditionnement et suivi par lot ne sont plus dans le
+        // formulaire : valeurs par défaut à la création, conservées en modification.
+        seuilAlerte: Math.max(0, Math.round(Number(f.seuilAlerte) || 0)),
         uniteVenteId: f.uniteVenteId,
         consommable: f.consommable === 'OUI',
         // Prix vide = pas de prix (ou prix inchangé en modification)
@@ -417,7 +422,9 @@ const COLONNES_IMPORT = [
   { cle: 'prixAchat', titre: "Prix d'achat", exemple: 350, aide: "En FCFA, par unité de vente, payé au fournisseur. S'il change, un nouveau prix est créé à la date du jour" },
   { cle: 'fournisseur', titre: 'Fournisseur', exemple: 'NPSP', aide: "Code ou raison sociale du fournisseur du prix d'achat (créé automatiquement s'il n'existe pas). Vide = prix d'achat pour tous les fournisseurs" },
   { cle: 'consommable', titre: 'Consommable', exemple: 'Non', aide: "Oui ou Non (coton, alcool… : pas facturé en caisse pharmacie). Non si vide" },
-  // --- Stock (seulement pour un NOUVEAU médicament) ---
+  // --- Stock ---
+  { cle: 'seuilAlerte', titre: "Seuil d'alerte", exemple: 50, aide: "Stock minimum au dépôt (par unité de vente) : en dessous, alerte « sous le seuil ». Vide = inchangé (0 pour un nouveau médicament)" },
+  // --- Stock initial (seulement pour un NOUVEAU médicament) ---
   { cle: 'stockInitial', titre: 'Stock initial', exemple: 200, aide: 'Seulement pour un nouveau médicament (ignoré si le code existe déjà)' },
   { cle: 'numeroLot', titre: 'N° de lot', exemple: 'LOT2026-01', aide: 'Obligatoire si un stock initial est indiqué' },
   { cle: 'datePeremption', titre: 'Date de péremption', exemple: '31/12/2027', aide: 'Date de péremption du lot (JJ/MM/AAAA)' },
@@ -455,6 +462,8 @@ async function importerLigne(valeurs) {
   // Lecture des valeurs AVANT de créer quoi que ce soit (une valeur invalide arrête la ligne)
   const prixVente = enNombreImport(valeurs.prixVente, 'Prix de vente')
   const prixAchat = enNombreImport(valeurs.prixAchat, "Prix d'achat")
+  const seuil = enNombreImport(valeurs.seuilAlerte, "Seuil d'alerte")
+  if (seuil !== null && seuil < 0) throw new Error("Seuil d'alerte : la valeur ne peut pas être négative.")
 
   // Famille, forme et unité de vente : retrouvées par code ou libellé, créées si elles n'existent pas
   const familleTexte = enTexte(valeurs.famille)
@@ -482,6 +491,7 @@ async function importerLigne(valeurs) {
     prixAchat,
     fournisseurId,
     consommable: enOuiNon(valeurs.consommable),
+    seuilAlerte: seuil === null ? null : Math.round(seuil),
   })
 
   // Stock initial, n° de lot et péremption : seulement pour un NOUVEAU médicament

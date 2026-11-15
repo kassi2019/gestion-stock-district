@@ -8,7 +8,7 @@
  *   - FICHE DE STOCK et FICHE D'INVENTAIRE en PDF.
  * =============================================================================
  */
-import { exporterDocumentPdf } from '@/utils/documentPdf'
+import { exporterDocumentPdf, nomUtilisateurConnecte } from '@/utils/documentPdf'
 import { formaterDate, formaterMontant, formaterNombre } from '@/utils/format'
 
 /**
@@ -119,7 +119,7 @@ export function ficheStockPdf(fiche, du, au) {
     ],
     lignes: fiche.mouvements,
     total: { libelle: 'STOCK EN FIN DE PÉRIODE', valeur: formaterNombre(fiche.stockFinal) },
-    signatures: ['Le gestionnaire du dépôt'],
+    signatures: [{ libelle: 'Le gestionnaire du dépôt', nom: nomUtilisateurConnecte() }],
     nomFichier: `fiche_stock_${m.code}`,
   })
 }
@@ -163,7 +163,11 @@ export function ficheInventairePdf(fiche, du, au) {
     ],
     lignes: fiche.lignes,
     total: { libelle: 'TOTAL DES ÉCARTS', valeur: formaterMontant(r.valeurEcarts) },
-    signatures: ['Les agents de comptage', 'Le gestionnaire du dépôt', 'Le responsable du district'],
+    signatures: [
+      { libelle: 'Les agents de comptage', nom: r.agents.join(', ') },
+      { libelle: 'Le gestionnaire du dépôt', nom: nomUtilisateurConnecte() },
+      { libelle: 'Le responsable du district', district: true },
+    ],
     nomFichier: `fiche_inventaire_${du}${au && au !== du ? '_' + au : ''}`,
   })
 }

@@ -73,7 +73,27 @@
                 <strong class="quantite" :class="etatMedicament(m).code.toLowerCase()">{{ formaterNombre(m.stock) }}</strong>
                 <div v-if="m.uniteVente" class="detail">{{ m.uniteVente.libelle.toLowerCase() }}</div>
               </td>
-              <td class="nombre">{{ m.seuilAlerte ? formaterNombre(m.seuilAlerte) : '—' }}</td>
+              <!-- Seuil d'alerte : modifiable directement (crayon ; Entrée = enregistrer, Échap = annuler) -->
+              <td class="nombre col-seuil" @click.stop>
+                <template v-if="seuilEnCours?.id === m.id">
+                  <input
+                    v-model.number="seuilEnCours.valeur"
+                    v-focus
+                    type="number"
+                    min="0"
+                    step="1"
+                    class="saisie-seuil"
+                    @keyup.enter="enregistrerSeuil"
+                    @keyup.esc="seuilEnCours = null"
+                  />
+                  <button class="bouton-lien" title="Enregistrer" @click="enregistrerSeuil">✓</button>
+                  <button class="bouton-lien" title="Annuler" @click="seuilEnCours = null">✕</button>
+                </template>
+                <template v-else>
+                  {{ m.seuilAlerte ? formaterNombre(m.seuilAlerte) : '—' }}
+                  <button v-si-modif class="bouton-lien crayon" title="Modifier le seuil d'alerte" @click="seuilEnCours = { id: m.id, valeur: m.seuilAlerte || 0 }">✎</button>
+                </template>
+              </td>
               <td class="nombre">
                 {{ m.lots.filter((l) => l.lotId).length || '—' }}
                 <span v-if="alerteLots(m)" class="point-alerte" :title="alerteLots(m)">●</span>
@@ -135,6 +155,7 @@ import Pagination from '@/components/Pagination.vue'
 import ColonneTri from '@/components/ColonneTri.vue'
 import { utiliserTableau } from '@/utils/pagination'
 import { formaterDate, formaterMontant, formaterNombre } from '@/utils/format'
+import { modifierSeuil } from '@/api/stock'
 import FicheStock from './FicheStock.vue'
 import { etatMedicament, etatPeremption } from './stockCommun'
 
@@ -142,7 +163,29 @@ const props = defineProps({
   etat: { type: Array, required: true },
   delaiAlerte: { type: Number, default: 90 },
 })
+const emit = defineEmits(['modifie'])
 const store = useStore()
+
+// ---------------------------------------------------------------------------
+// SEUIL D'ALERTE (stock minimum au dépôt) : modification directe dans le tableau
+// ---------------------------------------------------------------------------
+const seuilEnCours = ref(null) // { id, valeur } du médicament en cours de modification
+/** Place le curseur dans la case du seuil dès qu'elle apparaît. */
+const vFocus = { mounted: (el) => el.select() }
+
+async function enregistrerSeuil() {
+  const { id, valeur } = seuilEnCours.value
+  const seuil = Number(valeur)
+  if (!Number.isInteger(seuil) || seuil < 0) return store.dispatch('notifications/erreur', "Le seuil doit être un nombre entier positif (0 = pas d'alerte).")
+  try {
+    const med = await modifierSeuil(id, seuil)
+    seuilEnCours.value = null
+    store.dispatch('notifications/succes', `Seuil d'alerte de « ${med.designation} » : ${formaterNombre(med.seuilAlerte)}.`)
+    emit('modifie') // recharge l'état (statut « sous le seuil », alertes)
+  } catch (erreur) {
+    store.dispatch('notifications/erreurApi', erreur)
+  }
+}
 
 const OPTIONS_ETAT = [
   { id: 'RUPTURE', libelle: 'En rupture' },
@@ -238,6 +281,10 @@ onMounted(() => store.dispatch('referentiel/charger', { liste: 'familles' }).cat
 </script>
 
 <style scoped>
+.col-seuil { white-space: nowrap; }
+.col-seuil .crayon { margin-left: 0.25rem; opacity: 0.45; }
+.col-seuil:hover .crayon { opacity: 1; }
+.saisie-seuil { width: 80px; padding: 0.2rem 0.4rem; text-align: right; }
 .detail { font-size: 0.75rem; color: var(--muted); }
 .totaux { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem; margin-bottom: 1rem; }
 .total-case { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.7rem 0.9rem; border-radius: 12px; background: var(--fond-pale); font-size: 0.78rem; color: var(--muted); }

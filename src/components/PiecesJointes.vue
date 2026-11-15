@@ -67,9 +67,9 @@ import { formaterDate } from '@/utils/format'
 import { ajouterPiece, listerPieces, ouvrirPiece, supprimerPiece } from '@/api/pieces'
 
 const props = defineProps({
-  /** Module : 'achats' ou 'stock' (routes et droits du module) */
+  /** Module : 'achats', 'stock' ou 'livraisons' (routes et droits du module) */
   module: { type: String, default: 'achats' },
-  /** Type de document : 'CommandeFournisseur', 'Reception', 'MouvementStock' ou 'InventaireDepot' */
+  /** Type de document : 'CommandeFournisseur', 'Reception', 'MouvementStock', 'CommandeCentre' ou 'Livraison' */
   type: { type: String, required: true },
   id: { type: Number, required: true },
   titre: { type: String, default: 'Pièces justificatives' },
@@ -79,15 +79,16 @@ const emit = defineEmits(['fermer', 'modifie'])
 const store = useStore()
 
 /** Types de pièces proposés (cahier des charges §3.2). */
-const TYPES_PIECES =
-  props.module === 'stock'
-    ? ['Procès-verbal', 'Bordereau de transfert', 'Fiche de comptage', 'Constat de péremption', 'Autre']
-    : ['Facture fournisseur', 'Bon de livraison', 'Bon de réception signé', 'Bon de commande signé', 'Autre']
+const TYPES_PIECES = {
+  stock: ['Procès-verbal', 'Bordereau de transfert', 'Fiche de comptage', 'Constat de péremption', 'Autre'],
+  livraisons: ['Bon de livraison signé', 'Demande du centre', 'Bordereau de transport', 'Autre'],
+  achats: ['Facture fournisseur', 'Bon de livraison', 'Bon de réception signé', 'Bon de commande signé', 'Autre'],
+}[props.module] || ['Autre']
 
 const pieces = ref([])
 const chargement = ref(false)
 const envoi = ref(false)
-const libelle = ref(TYPES_PIECES[props.type === 'CommandeFournisseur' ? 3 : 0])
+const libelle = ref(TYPES_PIECES[props.type === 'CommandeFournisseur' ? 3 : props.type === 'CommandeCentre' ? 1 : 0])
 
 async function charger() {
   chargement.value = true

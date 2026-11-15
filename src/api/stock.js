@@ -71,3 +71,8 @@ export async function sortirLotsPerimes(donnees) {
 export async function resumeAlertes() {
   return (await http.get('/stock/alertes/resume')).data
 }
+
+/** Modifie le SEUIL D'ALERTE d'un médicament (stock minimum au dépôt ; 0 = pas d'alerte). */
+export async function modifierSeuil(medicamentId, seuilAlerte) {
+  return (await http.patch(`/stock/seuil/${medicamentId}`, { seuilAlerte })).data
+}

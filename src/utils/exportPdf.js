@@ -71,9 +71,9 @@ export async function infosDistrict() {
     ]
       .filter(Boolean)
       .join(' · ')
-    return { nom: valeur('NOM_DISTRICT') || 'District sanitaire', contact }
+    return { nom: valeur('NOM_DISTRICT') || 'District sanitaire', contact, responsable: valeur('DISTRICT_RESPONSABLE') }
   } catch {
-    return { nom: 'District sanitaire', contact: '' }
+    return { nom: 'District sanitaire', contact: '', responsable: '' }
   }
 }
 
