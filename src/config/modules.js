@@ -105,6 +105,7 @@ export const GROUPES = [
         description: 'Factures mensuelles générées à partir des consommations',
         icone: 'facture',
         couleur: 'principale',
+        vue: () => import('@/views/facturation/FacturationView.vue'),
       },
       {
         code: 'paiements',
@@ -112,6 +113,7 @@ export const GROUPES = [
         description: 'Encaissements, avances, reçus et relevés de compte',
         icone: 'portefeuille',
         couleur: 'secondaire',
+        vue: () => import('@/views/paiements/PaiementsView.vue'),
       },
     ],
   },
