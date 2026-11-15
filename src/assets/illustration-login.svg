@@ -1,0 +1,51 @@
+<!-- Illustration de la page de connexion (prévue pour un fond VERT) :
+     dépôt de médicaments (cartons, croix médicale, gélules).
+     Couleurs : blanc + vert santé #00a36c + vert menthe clair #9be3c0 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 320" fill="none">
+  <!-- Cercles de fond -->
+  <circle cx="200" cy="165" r="140" fill="#ffffff" fill-opacity="0.10"/>
+  <circle cx="200" cy="165" r="105" fill="#ffffff" fill-opacity="0.10"/>
+
+  <!-- Étagère -->
+  <rect x="70" y="250" width="260" height="10" rx="5" fill="#ffffff" fill-opacity="0.9"/>
+
+  <!-- Carton 1 -->
+  <rect x="90" y="180" width="70" height="70" rx="6" fill="#ffffff"/>
+  <rect x="90" y="180" width="70" height="16" rx="6" fill="#9be3c0"/>
+  <rect x="112" y="210" width="26" height="26" rx="3" fill="#00a36c"/>
+  <rect x="122" y="214" width="6" height="18" fill="#ffffff"/>
+  <rect x="116" y="220" width="18" height="6" fill="#ffffff"/>
+
+  <!-- Carton 2 (fiche de stock) -->
+  <rect x="170" y="150" width="80" height="100" rx="6" fill="#ffffff"/>
+  <rect x="170" y="150" width="80" height="18" rx="6" fill="#00a36c"/>
+  <rect x="184" y="182" width="52" height="6" rx="3" fill="#00a36c" fill-opacity="0.7"/>
+  <rect x="184" y="196" width="40" height="6" rx="3" fill="#cbd5e1"/>
+  <rect x="184" y="210" width="46" height="6" rx="3" fill="#cbd5e1"/>
+  <rect x="184" y="224" width="30" height="6" rx="3" fill="#cbd5e1"/>
+
+  <!-- Carton 3 -->
+  <rect x="260" y="195" width="55" height="55" rx="6" fill="#ffffff"/>
+  <rect x="260" y="195" width="55" height="14" rx="6" fill="#9be3c0"/>
+  <circle cx="287" cy="230" r="11" fill="#00a36c"/>
+
+  <!-- Grande croix médicale (contour blanc, centre menthe) -->
+  <rect x="178" y="40" width="44" height="100" rx="10" fill="#ffffff"/>
+  <rect x="150" y="68" width="100" height="44" rx="10" fill="#ffffff"/>
+  <rect x="188" y="50" width="24" height="80" rx="6" fill="#9be3c0"/>
+  <rect x="160" y="78" width="80" height="24" rx="6" fill="#9be3c0"/>
+
+  <!-- Gélules (moitié blanche, moitié menthe) -->
+  <g transform="rotate(-30 85 110)">
+    <rect x="60" y="100" width="50" height="20" rx="10" fill="#ffffff"/>
+    <rect x="85" y="100" width="25" height="20" rx="10" fill="#9be3c0"/>
+    <rect x="85" y="100" width="10" height="20" fill="#9be3c0"/>
+  </g>
+  <g transform="rotate(25 320 110)">
+    <rect x="295" y="100" width="50" height="20" rx="10" fill="#ffffff"/>
+    <rect x="295" y="100" width="25" height="20" rx="10" fill="#9be3c0"/>
+    <rect x="310" y="100" width="10" height="20" fill="#9be3c0"/>
+  </g>
+  <circle cx="340" cy="170" r="8" fill="#ffffff" fill-opacity="0.9"/>
+  <circle cx="60" cy="170" r="6" fill="#ffffff" fill-opacity="0.9"/>
+</svg>

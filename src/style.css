@@ -1,0 +1,237 @@
+/*
+ * =============================================================================
+ * STYLES COMMUNS À TOUTE L'APPLICATION
+ * =============================================================================
+ * Palette VERT SANTÉ + BLANC :
+ *   - vert santé (couleur principale, vert des pharmacies / croix médicale) ;
+ *   - vert menthe (couleur secondaire) ;
+ *   - fonds vert très pâle et cartes blanches.
+ *
+ * ➜ Pour changer les couleurs de toute l'application, il suffit de modifier
+ *   les variables ci-dessous (aucun autre fichier à toucher, sauf
+ *   l'illustration src/assets/illustration-login.svg).
+ * =============================================================================
+ */
+:root {
+  /* Fond pâle : menu, bannière d'accueil, bloc gauche de la connexion */
+  --fond-pale: #eef8f3;
+  --fond-pale-fonce: #d6efe2; /* variante un peu plus soutenue (dégradés) */
+  /* Texte posé sur le fond pâle */
+  --texte-sur-fond: #0f3d2a;
+
+  /* Couleur PRINCIPALE (vert santé) : boutons, liens, icônes, page active */
+  --primary: #00a36c;
+  --primary-dark: #007a50;
+  --primary-light: #e3f5ec;
+
+  /* Couleur SECONDAIRE (vert menthe) : mises en valeur, décors, tuiles alternées */
+  --accent: #4cc38a;
+  --accent-dark: #2a9464;
+  --accent-light: #e8f7ef;
+  --bg: #f4f6f8;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --danger: #b91c1c;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+button {
+  cursor: pointer;
+  border: 0;
+  border-radius: 6px;
+  padding: 0.55rem 1rem;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 600;
+}
+button:hover { background: var(--primary-dark); }
+button:disabled { opacity: 0.6; cursor: not-allowed; }
+input, select, textarea {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+}
+label { display: block; font-size: 0.875rem; margin-bottom: 0.25rem; color: var(--muted); }
+.card { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; }
+.error { color: var(--danger); font-size: 0.875rem; }
+
+/* =============================================================================
+   ÉLÉMENTS COMMUNS À TOUS LES MODULES
+   (tableaux, boutons, formulaires, badges, barre d'outils)
+   ➜ Utiliser ces classes dans les écrans pour garder la même apparence partout.
+   ============================================================================= */
+
+/* --- Carte blanche avec ombre (bloc principal d'un écran) --- */
+.bloc {
+  background: #fff;
+  border-radius: 14px;
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+/* --- Barre d'outils : recherche à gauche, boutons à droite --- */
+.barre-outils {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.barre-outils .recherche { flex: 1; min-width: 220px; max-width: 380px; }
+.barre-outils .espace { flex: 1; }
+.barre-outils select { width: auto; min-width: 180px; }
+
+/* --- Boutons --- */
+.bouton-secondaire {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+.bouton-secondaire:hover { background: #cdebdc; }
+.bouton-danger { background: #fdecec; color: var(--danger); }
+.bouton-danger:hover { background: var(--danger); color: #fff; }
+.bouton-lien {
+  padding: 0.25rem 0.5rem;
+  background: transparent;
+  color: var(--primary);
+  font-weight: 600;
+}
+.bouton-lien:hover { background: var(--primary-light); }
+.bouton-lien.danger { color: var(--danger); }
+.bouton-lien.danger:hover { background: #fdecec; }
+
+/* --- Champs de saisie --- */
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+/* Formulaire sur 2 colonnes (1 colonne sur petit écran) */
+.grille-formulaire {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.9rem 1rem;
+}
+.grille-formulaire .pleine-largeur { grid-column: 1 / -1; }
+.obligatoire::after { content: ' *'; color: var(--danger); }
+/* Petite mention « (facultatif) » à côté d'un libellé */
+.facultatif { font-size: 0.75rem; color: var(--muted); font-weight: 400; }
+.case-a-cocher { display: flex; align-items: center; gap: 0.5rem; color: var(--text); }
+.case-a-cocher input { width: auto; }
+@media (max-width: 640px) {
+  .grille-formulaire { grid-template-columns: 1fr; }
+}
+
+/* --- Tableaux --- */
+.tableau-conteneur { overflow-x: auto; }
+.tableau {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.tableau th {
+  text-align: left;
+  padding: 0.7rem 0.75rem;
+  background: var(--fond-pale);
+  color: var(--texte-sur-fond);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.tableau th:first-child { border-top-left-radius: 8px; }
+.tableau th:last-child { border-top-right-radius: 8px; }
+.tableau td {
+  padding: 0.7rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.tableau tbody tr:hover { background: #fafcfb; }
+.tableau .nombre { text-align: right; white-space: nowrap; }
+.tableau .actions { text-align: right; white-space: nowrap; }
+.tableau .ligne-inactive td { color: var(--muted); }
+.tableau-vide {
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: var(--muted);
+}
+
+/* --- Badges (petites étiquettes de statut) --- */
+.badge {
+  display: inline-block;
+  padding: 0.18rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.badge-vert { background: var(--primary-light); color: var(--primary-dark); }
+.badge-gris { background: #eef0f2; color: var(--muted); }
+.badge-rouge { background: #fdecec; color: var(--danger); }
+
+/* Code (ex. MED-001) en police à chasse fixe */
+.code { font-family: Consolas, 'Courier New', monospace; font-size: 0.85rem; color: var(--primary-dark); }
+
+/* =============================================================================
+   SWEETALERT2 : harmonisation avec les couleurs de l'application
+   (les fenêtres sont créées dans src/utils/alertes.js)
+   ============================================================================= */
+.swal2-popup {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  border-radius: 16px;
+}
+.swal2-title { color: var(--texte-sur-fond); }
+.swal2-styled { border-radius: 8px !important; font-weight: 600 !important; }
+
+/* Notifications en haut à droite : liseré coloré à gauche + ombre */
+.swal2-popup.swal2-toast.notification-swal {
+  border-left: 5px solid var(--primary);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  padding: 0.75rem 1rem;
+}
+.swal2-popup.swal2-toast.notification-swal:has(.swal2-error) { border-left-color: var(--danger); }
+.swal2-popup.swal2-toast .swal2-title { font-size: 0.95rem; color: var(--text); }
+.swal2-timer-progress-bar { background: var(--primary-light); }
+/* Place les notifications sous la barre du haut de l'application */
+.swal2-container.swal2-top-end { top: 70px !important; }
+
+/* =============================================================================
+   LISTES DÉROULANTES AVEC RECHERCHE (composant src/components/ListeDeroulante.vue)
+   Les variables --ms-... sont celles de la librairie @vueform/multiselect.
+   ============================================================================= */
+:root {
+  --ms-font-size: 1rem;
+  --ms-line-height: 1.375;
+  --ms-py: 0.45rem;
+  --ms-px: 0.65rem;
+  --ms-radius: 6px;
+  --ms-border-color: var(--border);
+  --ms-border-color-active: var(--primary);
+  --ms-ring-width: 3px;
+  --ms-ring-color: var(--primary-light);
+  --ms-placeholder-color: #9ca3af;
+  --ms-dropdown-border-color: var(--border);
+  --ms-dropdown-radius: 8px;
+  --ms-option-bg-pointed: var(--primary-light);
+  --ms-option-color-pointed: var(--primary-dark);
+  --ms-option-bg-selected: var(--primary);
+  --ms-option-bg-selected-pointed: var(--primary-dark);
+  --ms-empty-color: var(--muted);
+  --ms-max-height: 16rem;
+}
+/* La liste s'ouvre au-dessus des fenêtres de formulaire */
+.multiselect-dropdown {
+  z-index: 1000;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.15);
+}
+.multiselect.is-active { border-color: var(--primary); }
+.multiselect-search { font: inherit; }
+/* Largeur des listes utilisées comme filtres dans les barres d'outils */
+.barre-outils .filtre { min-width: 230px; }
