@@ -69,16 +69,17 @@ export function notifier(type, texte) {
  * @param titre           question principale (ex. 'Supprimer cette famille ?')
  * @param texte           explication (facultatif)
  * @param boutonConfirmer texte du bouton de confirmation (par défaut 'Oui, confirmer')
+ * @param boutonAnnuler   texte du bouton de refus (par défaut 'Annuler' ; ex. 'Plus tard')
  * @param danger          true = bouton rouge et icône d'avertissement
  */
-export async function confirmer({ titre, texte = '', boutonConfirmer = 'Oui, confirmer', danger = false }) {
+export async function confirmer({ titre, texte = '', boutonConfirmer = 'Oui, confirmer', boutonAnnuler = 'Annuler', danger = false }) {
   const resultat = await Swal.fire({
     title: titre,
     text: texte,
     icon: danger ? 'warning' : 'question',
     showCancelButton: true,
     confirmButtonText: boutonConfirmer,
-    cancelButtonText: 'Annuler',
+    cancelButtonText: boutonAnnuler,
     confirmButtonColor: danger ? ROUGE : VERT,
     cancelButtonColor: GRIS,
     reverseButtons: true, // "Annuler" à gauche, confirmation à droite

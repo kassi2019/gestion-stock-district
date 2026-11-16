@@ -24,6 +24,14 @@ export const STATUTS_LIVRAISON = {
   ANNULEE: { libelle: 'Annulée', badge: 'badge-rouge' },
 }
 
+/**
+ * Étapes du circuit « commande d'un centre -> livraison », affichées en haut
+ * des fenêtres Commande et Livraison (composant EtapesCircuit).
+ * Les numéros ci-dessous (ETAPE_LIVRAISON.xxx) servent à dire quelle étape est en cours.
+ */
+export const ETAPES_LIVRAISON = ['Commande', 'Accord', 'Préparation', 'Livraison', 'Bon de livraison']
+export const ETAPE_LIVRAISON = { COMMANDE: 0, ACCORD: 1, PREPARATION: 2, LIVRAISON: 3, BON: 4, TERMINE: 5 }
+
 export function optionsStatuts(statuts) {
   return Object.entries(statuts).map(([id, s]) => ({ id, libelle: s.libelle }))
 }

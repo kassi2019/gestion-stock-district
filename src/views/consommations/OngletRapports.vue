@@ -13,6 +13,9 @@
     « Fiche de vérification » : PDF à emporter, à remplir sur place.
   - VALIDATION : quantités retenues déduites du stock théorique du centre.
   Brouillon -> Soumis -> Validé -> Facturé (par le module Facturation).
+  ENCHAÎNEMENT (assistant) : barre d'étapes en haut de la fenêtre (saisie,
+  vérification facultative, validation, facturation) ; rapport validé :
+  bouton « Aller à la facturation » (si le profil a accès à ce module).
   Propriété : aOuvrir (rapport à ouvrir, choisi dans le tableau de suivi)
   =============================================================================
 -->
@@ -78,6 +81,17 @@
 
     <!-- ===================== SAISIE / CONSULTATION ===================== -->
     <FenetreModale v-if="formulaire" :titre="titreFormulaire" tres-large @fermer="formulaire = null">
+      <!-- Où en est le rapport dans le circuit (assistant pas à pas) -->
+      <EtapesCircuit :etapes="ETAPES_RAPPORT" :courante="etape.numero" :aide="etape.aide" />
+
+      <!-- Rapport validé : la suite se fait dans le module Facturation -->
+      <div v-if="formulaire.statut === 'VALIDE'" class="encart-suite">
+        <div><strong>Rapport validé.</strong> Le stock théorique du centre est à jour ; le rapport attend sa facture.</div>
+        <div v-if="peutVoirFacturation" class="encart-suite-boutons">
+          <button type="button" @click="allerFacturation">Aller à la facturation</button>
+        </div>
+      </div>
+
       <div v-if="formulaire.id" class="bandeau-statut">
         <span class="badge" :class="STATUTS_RAPPORT[formulaire.statut]?.badge">{{ STATUTS_RAPPORT[formulaire.statut]?.libelle }}</span>
         <small v-if="formulaire.statut === 'BROUILLON'">Brouillon : modifiable. « Soumettre » le transmet pour vérification et validation.</small>
@@ -275,6 +289,8 @@ import ImportExportTableau from '@/components/ImportExportTableau.vue'
 import Pagination from '@/components/Pagination.vue'
 import ColonneTri from '@/components/ColonneTri.vue'
 import PiecesJointes from '@/components/PiecesJointes.vue'
+import EtapesCircuit from '@/components/EtapesCircuit.vue'
+import { useRouter } from 'vue-router'
 import { utiliserTableau } from '@/utils/pagination'
 import { confirmer, demanderTexte } from '@/utils/alertes'
 import { nomPersonne, nomUtilisateurConnecte } from '@/utils/documentPdf'
@@ -292,6 +308,8 @@ import {
   verifierRapport,
 } from '@/api/consommations'
 import {
+  ETAPE_RAPPORT,
+  ETAPES_RAPPORT,
   ficheVerificationPdf,
   libellePeriode,
   OPTIONS_MOIS,
@@ -322,6 +340,28 @@ const centres = computed(() => store.state.referentiel.centres)
 const centresActifs = computed(() => centres.value.filter((c) => c.actif || c.id === formulaire.value?.centreId))
 const medicaments = computed(() => store.state.referentiel.medicaments)
 const lectureSeule = computed(() => !!formulaire.value?.id && formulaire.value.statut !== 'BROUILLON')
+
+/** Étape du circuit où se trouve le rapport ouvert (barre d'étapes en haut de la fenêtre). */
+const etape = computed(() => {
+  const f = formulaire.value
+  if (!f?.id || f.statut === 'BROUILLON') {
+    return { numero: ETAPE_RAPPORT.SAISIE, aide: 'Saisissez les quantités déclarées par le centre, puis « Enregistrer et soumettre ».' }
+  }
+  if (f.statut === 'SOUMIS' && !f.dateVerification) {
+    return { numero: ETAPE_RAPPORT.VERIFICATION, aide: 'Faites la « Vérification sur place » (facultative), ou validez directement le rapport.' }
+  }
+  if (f.statut === 'SOUMIS') return { numero: ETAPE_RAPPORT.VALIDATION, aide: 'Vérification faite : cliquez sur « Valider le rapport ».' }
+  if (f.statut === 'VALIDE') return { numero: ETAPE_RAPPORT.FACTURATION, aide: 'Le rapport sera facturé dans le module Facturation (onglet « À facturer »).' }
+  return { numero: ETAPE_RAPPORT.TERMINE, aide: 'Rapport facturé.' }
+})
+
+// Lien vers la facturation (seulement si le profil a accès au module Facturation)
+const router = useRouter()
+const peutVoirFacturation = computed(() => store.getters['auth/peutVoir']('facturation'))
+function allerFacturation() {
+  formulaire.value = null
+  router.push({ path: '/facturation', query: { onglet: 'a-facturer' } })
+}
 
 const titreFormulaire = computed(() => {
   const f = formulaire.value

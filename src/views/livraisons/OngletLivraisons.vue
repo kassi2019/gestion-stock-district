@@ -11,6 +11,10 @@
      -> sortie du stock du dépôt, entrée dans le stock théorique du centre,
         commande mise à jour (partiellement livrée / livrée).
   3. BON DE LIVRAISON en PDF (centre, produits, lots, quantités, prix, date).
+  ENCHAÎNEMENT (assistant, livraison d'une commande) : barre d'étapes en haut ;
+  après validation, encart « Imprimer le bon » + « Préparer le reliquat » s'il
+  reste à livrer. Une préparation déjà en cours pour la commande est ROUVERTE
+  (pas de doublon). Livraison directe : inchangée (pas de barre d'étapes).
 
   Propriété : commandeAPreparer (commande choisie dans l'onglet Commandes)
   =============================================================================
@@ -73,6 +77,26 @@
 
     <!-- ===================== PRÉPARATION / CONSULTATION ===================== -->
     <FenetreModale v-if="formulaire" :titre="titreFormulaire" tres-large @fermer="formulaire = null">
+      <!-- Où en est la livraison dans le circuit (seulement pour une livraison de commande) -->
+      <EtapesCircuit v-if="formulaire.commandeId && formulaire.statut !== 'ANNULEE'" :etapes="ETAPES_LIVRAISON" :courante="etape.numero" :aide="etape.aide" />
+
+      <!-- Dernière étape : livraison validée -> bon de livraison, et reliquat éventuel -->
+      <div v-if="formulaire.commandeId && formulaire.statut === 'VALIDEE'" class="encart-suite">
+        <div>
+          <strong>Livraison validée.</strong>
+          <span v-if="formulaire.resteCommande > 0">
+            Il reste <strong>{{ formaterNombre(formulaire.resteCommande) }}</strong> unité(s) à livrer sur la commande {{ formulaire.commandeNumero }}.
+          </span>
+          <span v-else>La commande {{ formulaire.commandeNumero }} est entièrement livrée.</span>
+        </div>
+        <div class="encart-suite-boutons">
+          <button v-si-imprimer type="button" @click="imprimer(formulaire)">Imprimer le bon de livraison</button>
+          <button v-if="formulaire.resteCommande > 0" v-si-modif type="button" class="bouton-secondaire" @click="preparerCommande({ id: formulaire.commandeId })">
+            Préparer le reliquat
+          </button>
+        </div>
+      </div>
+
       <div v-if="formulaire.id" class="bandeau-statut">
         <span class="badge" :class="STATUTS_LIVRAISON[formulaire.statut]?.badge">{{ STATUTS_LIVRAISON[formulaire.statut]?.libelle }}</span>
         <small v-if="formulaire.statut === 'BROUILLON'">
@@ -203,6 +227,7 @@ import ImportExportTableau from '@/components/ImportExportTableau.vue'
 import Pagination from '@/components/Pagination.vue'
 import ColonneTri from '@/components/ColonneTri.vue'
 import PiecesJointes from '@/components/PiecesJointes.vue'
+import EtapesCircuit from '@/components/EtapesCircuit.vue'
 import { utiliserTableau } from '@/utils/pagination'
 import { confirmer } from '@/utils/alertes'
 import { dateDuJour, formaterDate, formaterMontant, formaterNombre } from '@/utils/format'
@@ -217,7 +242,7 @@ import {
   trouverLivraison,
   validerLivraison,
 } from '@/api/livraisons'
-import { bonDeLivraisonPdf, optionsStatuts, STATUTS_LIVRAISON } from './livraisonsCommun'
+import { bonDeLivraisonPdf, ETAPE_LIVRAISON, ETAPES_LIVRAISON, optionsStatuts, STATUTS_LIVRAISON } from './livraisonsCommun'
 
 const props = defineProps({
   /** Commande à livrer (bouton « Préparer la livraison » de l'onglet Commandes) */
@@ -267,6 +292,17 @@ const optionsParLigne = computed(() => {
 })
 const lectureSeule = computed(() => !!formulaire.value?.id && formulaire.value.statut !== 'BROUILLON')
 
+/** Étape du circuit où se trouve la livraison ouverte (barre d'étapes en haut de la fenêtre). */
+const etape = computed(() => {
+  const f = formulaire.value
+  if (!f?.id) return { numero: ETAPE_LIVRAISON.PREPARATION, aide: 'Ajustez les quantités à préparer puis « Enregistrer la préparation » : les lots seront choisis automatiquement.' }
+  if (f.statut === 'BROUILLON') return { numero: ETAPE_LIVRAISON.LIVRAISON, aide: 'Saisissez la quantité réellement livrée par lot puis « Valider la livraison ».' }
+  return {
+    numero: ETAPE_LIVRAISON.BON,
+    aide: f.resteCommande > 0 ? 'Imprimez le bon de livraison, puis préparez le reliquat.' : 'Imprimez le bon de livraison : la commande est terminée.',
+  }
+})
+
 const titreFormulaire = computed(() => {
   const f = formulaire.value
   if (f.id) return `Livraison ${f.numero}`
@@ -310,16 +346,20 @@ async function ouvrir(livraison = null) {
     const parMedicament = new Map()
     for (const ligne of l.lignes) parMedicament.set(ligne.medicamentId, (parMedicament.get(ligne.medicamentId) || 0) + ligne.quantitePreparee)
     let restes = new Map()
-    if (l.commandeId && l.statut === 'BROUILLON') {
-      // Reste à livrer de la commande (+ ce que cette préparation réserve déjà)
+    if (l.commandeId && l.statut !== 'ANNULEE') {
+      // Reste à livrer de la commande, par médicament
+      // (brouillon : pour la colonne « Reste à livrer » ; validée : pour proposer le reliquat)
       const c = await trouverCommandeCentre(l.commandeId)
       restes = new Map(c.lignes.map((x) => [x.medicamentId, Math.max(0, (x.quantiteAccordee || 0) - (x.quantiteLivree || 0))]))
     }
+    // Total restant à livrer sur la commande (0 = commande terminée)
+    const resteCommande = [...restes.values()].reduce((t, q) => t + q, 0)
     formulaire.value = {
       ...l,
       dateLivraison: l.dateLivraison.substring(0, 10),
       observations: l.observations || '',
       commandeNumero: l.commande?.numero || '',
+      resteCommande,
       lignes: l.lignes.map((x) => ({ ...x, saisieLivree: x.quantitePreparee })),
       demandes: [...parMedicament].map(([medicamentId, quantite]) => ({ medicamentId, quantite, reste: restes.get(medicamentId) ?? quantite })),
     }
@@ -330,10 +370,19 @@ async function ouvrir(livraison = null) {
   }
 }
 
-/** Nouvelle préparation à partir d'une commande validée (reste à livrer). */
+/**
+ * Nouvelle préparation à partir d'une commande validée (reste à livrer).
+ * Si une préparation de cette commande est DÉJÀ en cours (brouillon), on la
+ * rouvre au lieu d'en créer une seconde.
+ */
 async function preparerCommande(commande) {
   try {
     const c = await trouverCommandeCentre(commande.id)
+    const enCours = (c.livraisons || []).find((l) => l.statut === 'BROUILLON')
+    if (enCours) {
+      store.dispatch('notifications/info', `Une préparation est déjà en cours pour la commande ${c.numero} (${enCours.numero}) : elle est rouverte.`)
+      return ouvrir(enCours)
+    }
     const demandes = c.lignes
       .map((l) => ({ medicamentId: l.medicamentId, reste: Math.max(0, (l.quantiteAccordee || 0) - (l.quantiteLivree || 0)) }))
       .filter((d) => d.reste > 0)

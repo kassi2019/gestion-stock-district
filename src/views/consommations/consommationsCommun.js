@@ -18,6 +18,14 @@ export const STATUTS_RAPPORT = {
   FACTURE: { libelle: 'Facturé', badge: 'badge-orange' },
 }
 
+/**
+ * Étapes du circuit d'un rapport mensuel, affichées en haut de la fenêtre
+ * du rapport (composant EtapesCircuit). La vérification sur place est facultative.
+ * Les numéros ci-dessous (ETAPE_RAPPORT.xxx) servent à dire quelle étape est en cours.
+ */
+export const ETAPES_RAPPORT = ['Saisie et soumission', 'Vérification sur place (facultative)', 'Validation', 'Facturation']
+export const ETAPE_RAPPORT = { SAISIE: 0, VERIFICATION: 1, VALIDATION: 2, FACTURATION: 3, TERMINE: 4 }
+
 export const MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 export const OPTIONS_MOIS = MOIS.map((libelle, i) => ({ id: i + 1, libelle }))
 

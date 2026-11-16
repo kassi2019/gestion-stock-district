@@ -11,6 +11,10 @@
   - Actions : Bon de commande (PDF), Pièces jointes, Réceptionner (ouvre une
     réception pré-remplie avec les quantités restant à recevoir).
 
+  ENCHAÎNEMENT (assistant) : barre d'étapes en haut de la fenêtre ; après
+  « Enregistrer et valider », question « Réceptionner maintenant ? »
+  (Oui = ouvre la réception ; Plus tard = la commande reste affichée).
+
   Événement : @receptionner(commande) -> la page ouvre l'onglet Réceptions
   =============================================================================
 -->
@@ -99,6 +103,9 @@
       tres-large
       @fermer="formulaire = null"
     >
+      <!-- Où en est la commande dans le circuit (assistant pas à pas) -->
+      <EtapesCircuit v-if="formulaire.statut !== 'ANNULEE'" :etapes="ETAPES_ACHAT" :courante="etape.numero" :aide="etape.aide" />
+
       <!-- Statut (commande existante) -->
       <div v-if="formulaire.id" class="bandeau-statut">
         <span class="badge" :class="STATUTS_COMMANDE[formulaire.statut]?.badge">{{ STATUTS_COMMANDE[formulaire.statut]?.libelle }}</span>
@@ -239,7 +246,8 @@ import { utiliserTableau } from '@/utils/pagination'
 import { confirmer } from '@/utils/alertes'
 import { dateDuJour, formaterDate, formaterMontant } from '@/utils/format'
 import { annulerCommande, creerCommande, listerCommandes, modifierCommande, trouverCommande, validerCommande } from '@/api/achats'
-import { bonDeCommandePdf, optionsStatuts, STATUTS_COMMANDE, STATUTS_RECEPTION } from './achatsCommun'
+import EtapesCircuit from '@/components/EtapesCircuit.vue'
+import { bonDeCommandePdf, ETAPE_ACHAT, ETAPES_ACHAT, optionsStatuts, STATUTS_COMMANDE, STATUTS_RECEPTION } from './achatsCommun'
 
 const emit = defineEmits(['receptionner', 'modifie'])
 const store = useStore()
@@ -260,6 +268,18 @@ const medicamentsActifs = computed(() => medicaments.value.filter((m) => m.actif
 
 /** Commande non modifiable (déjà validée, reçue ou annulée). */
 const lectureSeule = computed(() => !!formulaire.value?.id && formulaire.value.statut !== 'BROUILLON')
+
+/** Étape du circuit où se trouve la commande ouverte (barre d'étapes en haut de la fenêtre). */
+const etape = computed(() => {
+  const f = formulaire.value
+  if (!f?.id || f.statut === 'BROUILLON') {
+    return { numero: ETAPE_ACHAT.COMMANDE, aide: 'Choisissez le fournisseur et les médicaments, puis « Enregistrer et valider ».' }
+  }
+  if (f.statut === 'VALIDEE' || f.statut === 'PARTIELLEMENT_RECUE') {
+    return { numero: ETAPE_ACHAT.RECEPTION, aide: 'À l\'arrivée des médicaments, cliquez sur « Réceptionner ».' }
+  }
+  return { numero: ETAPE_ACHAT.TERMINE, aide: 'Commande entièrement reçue.' }
+})
 
 /** Recherche (n°, fournisseur) sur la liste chargée. */
 const commandesAffichees = computed(() => {
@@ -373,6 +393,17 @@ async function enregistrer(valider) {
     await ouvrirFormulaire(commande)
     await charger()
     emit('modifie')
+    // ENCHAÎNEMENT : les médicaments arrivent souvent plus tard, on demande donc
+    // si la réception se fait maintenant (sinon la commande reste affichée)
+    if (valider) {
+      const maintenant = await confirmer({
+        titre: 'Réceptionner maintenant ?',
+        texte: `Si les médicaments de la commande ${commande.numero} sont déjà arrivés, passez directement à la réception.`,
+        boutonConfirmer: 'Oui, réceptionner',
+        boutonAnnuler: 'Plus tard',
+      })
+      if (maintenant) receptionner(commande)
+    }
   } catch (erreur) {
     store.dispatch('notifications/erreurApi', erreur)
   } finally {

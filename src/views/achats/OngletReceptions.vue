@@ -13,6 +13,9 @@
   - Brouillon (modifiable) -> VALIDÉE : c'est la VALIDATION qui fait entrer
     les médicaments dans le STOCK du dépôt (irréversible).
   - Bon de réception (PDF) et pièces justificatives (facture, bon de livraison).
+  ENCHAÎNEMENT (assistant, réception d'une commande) : barre d'étapes en haut ;
+  après validation, encart « Imprimer le bon » + « Réceptionner la suite » s'il
+  reste à recevoir. Un brouillon déjà ouvert pour la commande est ROUVERT.
 
   Propriété : commandeAReceptionner (commande choisie dans l'onglet Commandes)
   Événement : @modifie -> la page met à jour les compteurs
@@ -89,6 +92,26 @@
       tres-large
       @fermer="formulaire = null"
     >
+      <!-- Où en est la réception dans le circuit (seulement pour une réception de commande) -->
+      <EtapesCircuit v-if="formulaire.commandeId && formulaire.statut !== 'ANNULEE'" :etapes="ETAPES_ACHAT" :courante="etape.numero" :aide="etape.aide" />
+
+      <!-- Dernière étape : réception validée -> bon de réception, et suite éventuelle -->
+      <div v-if="formulaire.commandeId && formulaire.statut === 'VALIDEE'" class="encart-suite">
+        <div>
+          <strong>Réception validée : les médicaments sont en stock.</strong>
+          <span v-if="formulaire.resteCommande > 0">
+            Il reste <strong>{{ formaterNombre(formulaire.resteCommande) }}</strong> unité(s) à recevoir sur la commande {{ formulaire.commande?.numero }}.
+          </span>
+          <span v-else>La commande {{ formulaire.commande?.numero }} est entièrement reçue.</span>
+        </div>
+        <div class="encart-suite-boutons">
+          <button v-si-imprimer type="button" @click="imprimer(formulaire)">Imprimer le bon de réception</button>
+          <button v-if="formulaire.resteCommande > 0" v-si-modif type="button" class="bouton-secondaire" @click="nouvelleDepuisCommande({ id: formulaire.commandeId })">
+            Réceptionner la suite
+          </button>
+        </div>
+      </div>
+
       <div v-if="formulaire.id" class="bandeau-statut">
         <span class="badge" :class="STATUTS_RECEPTION[formulaire.statut]?.badge">{{ STATUTS_RECEPTION[formulaire.statut]?.libelle }}</span>
         <small v-if="formulaire.statut === 'VALIDEE'">
@@ -241,7 +264,8 @@ import ColonneTri from '@/components/ColonneTri.vue'
 import PiecesJointes from '@/components/PiecesJointes.vue'
 import { utiliserTableau } from '@/utils/pagination'
 import { confirmer } from '@/utils/alertes'
-import { dateDuJour, formaterDate, formaterMontant } from '@/utils/format'
+import { dateDuJour, formaterDate, formaterMontant, formaterNombre } from '@/utils/format'
+import EtapesCircuit from '@/components/EtapesCircuit.vue'
 import {
   annulerReception,
   creerReception,
@@ -252,7 +276,7 @@ import {
   trouverReception,
   validerReception,
 } from '@/api/achats'
-import { bonDeReceptionPdf, optionsStatuts, STATUTS_RECEPTION } from './achatsCommun'
+import { bonDeReceptionPdf, ETAPE_ACHAT, ETAPES_ACHAT, optionsStatuts, STATUTS_RECEPTION } from './achatsCommun'
 
 const props = defineProps({
   /** Commande à réceptionner (bouton « Réceptionner » de l'onglet Commandes) */
@@ -278,6 +302,17 @@ const medicamentsActifs = computed(() => medicaments.value.filter((m) => m.actif
 
 /** Réception non modifiable (validée ou annulée). */
 const lectureSeule = computed(() => !!formulaire.value?.id && formulaire.value.statut !== 'BROUILLON')
+
+/** Étape du circuit où se trouve la réception ouverte (barre d'étapes en haut de la fenêtre). */
+const etape = computed(() => {
+  const f = formulaire.value
+  if (!f?.id) return { numero: ETAPE_ACHAT.RECEPTION, aide: 'Saisissez les quantités reçues, n° de lot et péremption, puis « Valider (entrée en stock) ».' }
+  if (f.statut === 'BROUILLON') return { numero: ETAPE_ACHAT.VALIDATION, aide: 'Vérifiez les lignes puis « Valider (entrée en stock) ».' }
+  return {
+    numero: ETAPE_ACHAT.BON,
+    aide: f.resteCommande > 0 ? 'Imprimez le bon de réception ; la suite de la commande pourra être réceptionnée à son arrivée.' : 'Imprimez le bon de réception : la commande est terminée.',
+  }
+})
 
 const receptionsAffichees = computed(() => {
   const texte = recherche.value.toLowerCase()
@@ -346,13 +381,32 @@ async function ouvrirFormulaire(reception = null) {
     }
     // Brouillon lié à une commande : on affiche les restes à recevoir
     if (r.statut === 'BROUILLON' && r.commandeId) await completerRestes(r.commandeId)
+    // Validée et liée à une commande : total restant à recevoir (pour proposer la suite)
+    if (r.statut === 'VALIDEE' && r.commandeId) {
+      const c = await trouverCommande(r.commandeId)
+      formulaire.value.resteCommande = c.lignes.reduce((t, l) => t + Math.max(0, l.quantite - l.quantiteRecue), 0)
+    }
   } catch (erreur) {
     store.dispatch('notifications/erreurApi', erreur)
   }
 }
 
-/** Nouvelle réception à partir d'une commande : lignes = restes à recevoir. */
+/**
+ * Nouvelle réception à partir d'une commande : lignes = restes à recevoir.
+ * Si une réception de cette commande est DÉJÀ en brouillon, on la rouvre
+ * au lieu d'en créer une seconde.
+ */
 async function nouvelleDepuisCommande(commande) {
+  try {
+    const c = await trouverCommande(commande.id)
+    const enCours = (c.receptions || []).find((r) => r.statut === 'BROUILLON')
+    if (enCours) {
+      store.dispatch('notifications/info', `Une réception est déjà en brouillon pour la commande ${c.numero} (${enCours.numero}) : elle est rouverte.`)
+      return ouvrirFormulaire(enCours)
+    }
+  } catch (erreur) {
+    return store.dispatch('notifications/erreurApi', erreur)
+  }
   formulaire.value = videFormulaire()
   formulaire.value.commandeId = commande.id
   await choisirCommande(commande.id)

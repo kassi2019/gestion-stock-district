@@ -237,3 +237,23 @@ input:focus, select:focus, textarea:focus {
 .multiselect-search { font: inherit; }
 /* Largeur des listes utilisées comme filtres dans les barres d'outils */
 .barre-outils .filtre { min-width: 230px; }
+
+/* -------------------------------------------------------------------------
+   ENCART « SUITE DU CIRCUIT » (fenêtres avec barre d'étapes EtapesCircuit)
+   Affiché quand un document vient d'être validé : il propose l'action
+   suivante (imprimer le bon, préparer le reliquat, réceptionner la suite…).
+   ------------------------------------------------------------------------- */
+.encart-suite {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--primary);
+  border-radius: 10px;
+  background: #fff;
+  font-size: 0.9rem;
+}
+.encart-suite-boutons { display: flex; flex-wrap: wrap; gap: 0.5rem; }

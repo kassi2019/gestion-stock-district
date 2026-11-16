@@ -11,6 +11,8 @@
   - Ensuite : « Préparer la livraison » (onglet Bons de livraison, pré-rempli
     avec le reste à livrer). Avancement de la livraison visible dans la liste.
   Brouillon (modifiable) -> Validée -> Partiellement livrée -> Livrée ; Annulée.
+  ENCHAÎNEMENT (assistant) : barre d'étapes en haut de la fenêtre ; après
+  « Valider », la préparation de la livraison s'ouvre AUTOMATIQUEMENT.
 
   Événement : @preparer(commande) -> la page ouvre l'onglet Bons de livraison
   =============================================================================
@@ -81,6 +83,9 @@
 
     <!-- ===================== FORMULAIRE / CONSULTATION ===================== -->
     <FenetreModale v-if="formulaire" :titre="formulaire.id ? `Commande ${formulaire.numero}` : 'Nouvelle commande d\'un centre'" tres-large @fermer="formulaire = null">
+      <!-- Où en est la commande dans le circuit (assistant pas à pas) -->
+      <EtapesCircuit v-if="formulaire.statut !== 'ANNULEE'" :etapes="ETAPES_LIVRAISON" :courante="etape.numero" :aide="etape.aide" />
+
       <div v-if="formulaire.id" class="bandeau-statut">
         <span class="badge" :class="STATUTS_COMMANDE_CENTRE[formulaire.statut]?.badge">{{ STATUTS_COMMANDE_CENTRE[formulaire.statut]?.libelle }}</span>
         <small v-if="formulaire.statut === 'BROUILLON'">
@@ -193,6 +198,7 @@ import ImportExportTableau from '@/components/ImportExportTableau.vue'
 import Pagination from '@/components/Pagination.vue'
 import ColonneTri from '@/components/ColonneTri.vue'
 import PiecesJointes from '@/components/PiecesJointes.vue'
+import EtapesCircuit from '@/components/EtapesCircuit.vue'
 import { utiliserTableau } from '@/utils/pagination'
 import { confirmer } from '@/utils/alertes'
 import { dateDuJour, formaterDate, formaterMontant, formaterNombre } from '@/utils/format'
@@ -205,7 +211,7 @@ import {
   trouverCommandeCentre,
   validerCommandeCentre,
 } from '@/api/livraisons'
-import { optionsStatuts, STATUTS_COMMANDE_CENTRE, STATUTS_LIVRAISON } from './livraisonsCommun'
+import { ETAPE_LIVRAISON, ETAPES_LIVRAISON, optionsStatuts, STATUTS_COMMANDE_CENTRE, STATUTS_LIVRAISON } from './livraisonsCommun'
 
 const emit = defineEmits(['preparer'])
 const store = useStore()
@@ -262,6 +268,15 @@ const commandesAffichees = computed(() => {
 })
 
 const aLivrer = (c) => c.statut === 'VALIDEE' || c.statut === 'PARTIELLEMENT_LIVREE'
+
+/** Étape du circuit où se trouve la commande ouverte (barre d'étapes en haut de la fenêtre). */
+const etape = computed(() => {
+  const f = formulaire.value
+  if (!f?.id) return { numero: ETAPE_LIVRAISON.COMMANDE, aide: 'Choisissez le centre et les médicaments demandés, puis « Enregistrer et accorder ».' }
+  if (f.statut === 'BROUILLON') return { numero: ETAPE_LIVRAISON.ACCORD, aide: 'Vérifiez la colonne « Accordé » puis « Valider » : la préparation de la livraison s\'ouvrira ensuite.' }
+  if (aLivrer(f)) return { numero: ETAPE_LIVRAISON.PREPARATION, aide: 'Cliquez sur « Préparer la livraison » pour livrer le reste de la commande.' }
+  return { numero: ETAPE_LIVRAISON.TERMINE, aide: 'Commande entièrement livrée.' }
+})
 function pourcentage(c) {
   return c.quantiteAccordee ? Math.min(100, Math.round((c.quantiteLivree / c.quantiteAccordee) * 100)) : 0
 }
@@ -398,9 +413,15 @@ async function valider() {
       quantiteAccordee: Number(f.lignes.find((x) => x.medicamentId === l.medicamentId)?.quantiteAccordee ?? l.quantiteDemandee) || 0,
     }))
     const commande = await validerCommandeCentre(f.id, accords)
-    store.dispatch('notifications/succes', `Commande ${commande.numero} validée.`)
-    await ouvrir(commande)
     await charger()
+    // ENCHAÎNEMENT : on passe directement à l'étape suivante (préparation de la livraison)
+    if (aLivrer(commande)) {
+      store.dispatch('notifications/succes', `Commande ${commande.numero} validée : préparez maintenant la livraison.`)
+      preparer(commande)
+    } else {
+      store.dispatch('notifications/succes', `Commande ${commande.numero} validée.`)
+      await ouvrir(commande)
+    }
   } catch (erreur) {
     store.dispatch('notifications/erreurApi', erreur)
   } finally {

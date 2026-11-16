@@ -25,6 +25,14 @@ export const STATUTS_RECEPTION = {
   ANNULEE: { libelle: 'Annulée', badge: 'badge-rouge' },
 }
 
+/**
+ * Étapes du circuit « commande fournisseur -> réception », affichées en haut
+ * des fenêtres Commande et Réception (composant EtapesCircuit).
+ * Les numéros ci-dessous (ETAPE_ACHAT.xxx) servent à dire quelle étape est en cours.
+ */
+export const ETAPES_ACHAT = ['Commande', 'Réception', 'Entrée en stock', 'Bon de réception']
+export const ETAPE_ACHAT = { COMMANDE: 0, RECEPTION: 1, VALIDATION: 2, BON: 3, TERMINE: 4 }
+
 /** Liste { id, libelle } pour les listes déroulantes de filtre. */
 export function optionsStatuts(statuts) {
   return Object.entries(statuts).map(([id, s]) => ({ id, libelle: s.libelle }))
