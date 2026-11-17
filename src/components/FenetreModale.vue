@@ -15,6 +15,7 @@
   - "titre"  : texte affiché en haut ;
   - "large"  : fenêtre plus large (pour les gros formulaires / tableaux) ;
   - "tres-large" : encore plus large (documents avec beaucoup de colonnes) ;
+  - "plein-ecran" : occupe presque tout l'écran (grands tableaux : rapport centre) ;
   - @fermer  : émis quand l'utilisateur clique sur la croix ×.
 
   ⚠ Volontairement, la fenêtre NE se ferme PAS toute seule :
@@ -27,7 +28,7 @@
 -->
 <template>
   <div class="fond">
-    <div class="fenetre" :class="{ large, 'tres-large': tresLarge }" role="dialog" aria-modal="true">
+    <div class="fenetre" :class="{ large, 'tres-large': tresLarge, 'plein-ecran': pleinEcran }" role="dialog" aria-modal="true">
       <header class="entete">
         <h3>{{ titre }}</h3>
         <button class="fermer" title="Fermer" @click="emit('fermer')">×</button>
@@ -51,6 +52,8 @@ defineProps({
   large: { type: Boolean, default: false },
   /** Fenêtre encore plus large (documents avec beaucoup de colonnes : commandes, réceptions) */
   tresLarge: { type: Boolean, default: false },
+  /** Fenêtre sur presque tout l'écran (tableaux avec beaucoup de colonnes et de lignes) */
+  pleinEcran: { type: Boolean, default: false },
 })
 const emit = defineEmits(['fermer'])
 </script>
@@ -79,6 +82,7 @@ const emit = defineEmits(['fermer'])
 }
 .fenetre.large { max-width: 900px; }
 .fenetre.tres-large { max-width: 1200px; }
+.fenetre.plein-ecran { max-width: none; height: calc(100vh - 2rem); }
 
 .entete {
   display: flex;
@@ -102,6 +106,7 @@ const emit = defineEmits(['fermer'])
 .fermer:hover { background: #fdecec; color: var(--danger); }
 
 .corps { padding: 1.25rem 1.5rem; overflow-y: auto; }
+.plein-ecran .corps { flex: 1; }
 
 .pied {
   display: flex;

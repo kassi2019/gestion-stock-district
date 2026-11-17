@@ -35,7 +35,7 @@
       </div>
       <span class="espace"></span>
       <ImportExportTableau titre="Rapports mensuels de consommation" :sous-titre="sousTitrePdf" nom-fichier="rapports_consommation" :colonnes-pdf="COLONNES_PDF" :lignes="lignesTriees" />
-      <button v-si-modif @click="ouvrir()">+ Nouveau rapport</button>
+      <!-- Plus de création ici : les nouveaux rapports se font dans « Rapports centre » (spec nov. 2026) -->
     </div>
 
     <div class="tableau-conteneur">

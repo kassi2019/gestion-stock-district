@@ -2,7 +2,6 @@
  * =============================================================================
  * APPELS API : MODULE 03 — APPROVISIONNEMENTS ET ACHATS
  * =============================================================================
- *   - COMMANDES fournisseurs (brouillon -> validée -> reçue) ;
  *   - RÉCEPTIONS (brouillon -> VALIDÉE = entrée en stock) ;
  *   - HISTORIQUE des achats ;
  *   - PIÈCES JUSTIFICATIVES (fichiers joints).
@@ -17,44 +16,22 @@ function filtresPropres(filtres = {}) {
 }
 
 // ----------------------------------------------------------------------------
-// COMMANDES FOURNISSEURS
-// ----------------------------------------------------------------------------
-
-/** Liste des commandes : filtres { fournisseurId, statut, du, au } (dates AAAA-MM-JJ). */
-export async function listerCommandes(filtres) {
-  return (await http.get('/achats/commandes', { params: filtresPropres(filtres) })).data
-}
-
-/** Une commande avec ses lignes et ses réceptions. */
-export async function trouverCommande(id) {
-  return (await http.get(`/achats/commandes/${id}`)).data
-}
-
-/** Nouvelle commande (brouillon) : { fournisseurId, dateCommande, observations, lignes: [{ medicamentId, quantite, prixUnitaire }] }. */
-export async function creerCommande(donnees) {
-  return (await http.post('/achats/commandes', donnees)).data
-}
-
-/** Modification d'une commande en brouillon (les lignes sont remplacées). */
-export async function modifierCommande(id, donnees) {
-  return (await http.patch(`/achats/commandes/${id}`, donnees)).data
-}
-
-export async function validerCommande(id) {
-  return (await http.post(`/achats/commandes/${id}/valider`)).data
-}
-
-export async function annulerCommande(id) {
-  return (await http.post(`/achats/commandes/${id}/annuler`)).data
-}
-
-// ----------------------------------------------------------------------------
 // RÉCEPTIONS
 // ----------------------------------------------------------------------------
 
-/** Liste des réceptions : filtres { fournisseurId, commandeId, statut, du, au }. */
+/** Liste des réceptions : filtres { fournisseurId, statut, du, au }. */
 export async function listerReceptions(filtres) {
   return (await http.get('/achats/receptions', { params: filtresPropres(filtres) })).data
+}
+
+/**
+ * Prix d'achat repris des paramètres (non modifiables à la saisie).
+ * Renvoie { medicamentId: prix } (prix = null s'il n'est pas défini).
+ */
+export async function prixAchatReception({ medicamentIds, fournisseurId, date }) {
+  if (!medicamentIds.length) return {}
+  const params = filtresPropres({ medicamentIds: medicamentIds.join(','), fournisseurId, date })
+  return (await http.get('/achats/prix-achat', { params })).data
 }
 
 export async function trouverReception(id) {
@@ -63,8 +40,8 @@ export async function trouverReception(id) {
 
 /**
  * Nouvelle réception (brouillon) :
- * { commandeId?, fournisseurId?, dateReception, numFactureFourn?, numBonLivraison?, observations?,
- *   lignes: [{ medicamentId, quantite, prixUnitaire, numeroLot?, datePeremption? }] }
+ * { fournisseurId, dateReception, numFactureFourn?, numBonLivraison?, observations?,
+ *   lignes: [{ medicamentId, quantite, numeroLot?, datePeremption? }] }  (prix repris des paramètres)
  */
 export async function creerReception(donnees) {
   return (await http.post('/achats/receptions', donnees)).data

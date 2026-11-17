@@ -63,7 +63,7 @@
             <ColonneTri v-model="tri" cle="date">Date</ColonneTri>
             <ColonneTri v-model="tri" cle="reception">Réception</ColonneTri>
             <ColonneTri v-model="tri" cle="fournisseur">Fournisseur</ColonneTri>
-            <ColonneTri v-model="tri" cle="commande">Commande</ColonneTri>
+            <ColonneTri v-model="tri" cle="bonLivraison">Bon de livraison</ColonneTri>
             <ColonneTri v-model="tri" cle="facture">Facture fourn.</ColonneTri>
             <ColonneTri v-model="tri" cle="lignes" class="nombre">Médicaments</ColonneTri>
             <ColonneTri v-model="tri" cle="montant" class="nombre">Montant</ColonneTri>
@@ -77,7 +77,7 @@
               <td>{{ formaterDate(g.reception.dateReception) }}</td>
               <td class="code">{{ g.reception.numero }}</td>
               <td><strong>{{ g.reception.fournisseur.raisonSociale }}</strong></td>
-              <td><span v-if="g.reception.commande" class="code">{{ g.reception.commande.numero }}</span><span v-else class="detail">Directe</span></td>
+              <td>{{ g.reception.numBonLivraison || '—' }}</td>
               <td>{{ g.reception.numFactureFourn || '—' }}</td>
               <td class="nombre"><span class="badge badge-vert">{{ g.lignes.length }}</span></td>
               <td class="nombre"><strong>{{ formaterMontant(g.montant) }}</strong></td>
@@ -203,7 +203,7 @@ const VALEURS_TRI = {
   date: (g) => g.reception.dateReception,
   reception: (g) => g.reception.numero,
   fournisseur: (g) => g.reception.fournisseur.raisonSociale,
-  commande: (g) => g.reception.commande?.numero,
+  bonLivraison: (g) => g.reception.numBonLivraison,
   facture: (g) => g.reception.numFactureFourn,
   lignes: (g) => g.lignes.length,
   montant: (g) => g.montant,

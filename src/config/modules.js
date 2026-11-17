@@ -59,8 +59,8 @@ export const GROUPES = [
     modules: [
       {
         code: 'achats',
-        titre: 'Achats & réceptions',
-        description: 'Commandes fournisseurs, réceptions, lots et péremptions',
+        titre: 'Réception fournisseurs',
+        description: 'Livraisons reçues des fournisseurs, lots, péremptions et historique',
         icone: 'panier',
         couleur: 'principale',
         vue: () => import('@/views/achats/AchatsView.vue'),
@@ -80,16 +80,16 @@ export const GROUPES = [
     modules: [
       {
         code: 'livraisons',
-        titre: 'Commandes & livraisons',
-        description: 'Commandes des centres, préparation et bons de livraison',
+        titre: 'Stock des centres',
+        description: 'Stock théorique des centres et anciens bons de livraison',
         icone: 'camion',
         couleur: 'principale',
         vue: () => import('@/views/livraisons/LivraisonsView.vue'),
       },
       {
         code: 'consommations',
-        titre: 'Consommations mensuelles',
-        description: 'Saisie et validation des rapports de consommation',
+        titre: 'Rapports centre de santé',
+        description: 'Consommation mensuelle, stock restant et quantité à livrer',
         icone: 'presse-papier',
         couleur: 'secondaire',
         vue: () => import('@/views/consommations/ConsommationsView.vue'),
@@ -102,7 +102,7 @@ export const GROUPES = [
       {
         code: 'facturation',
         titre: 'Facturation',
-        description: 'Factures mensuelles générées à partir des consommations',
+        description: 'Sorties du district vers les centres (rapports et factures manuelles)',
         icone: 'facture',
         couleur: 'principale',
         vue: () => import('@/views/facturation/FacturationView.vue'),

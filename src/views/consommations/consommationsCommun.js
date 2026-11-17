@@ -161,3 +161,87 @@ export function ficheVerificationPdf(rapport) {
     nomFichier: `fiche_verification_${rapport.numero}`,
   })
 }
+
+// =============================================================================
+// RAPPORT CENTRE DE SANTÉ (spec nov. 2026)
+// =============================================================================
+
+/** Statuts d'un rapport centre : brouillon (modifiable) ou validé (verrouillé). */
+export const STATUTS_RAPPORT_CENTRE = {
+  BROUILLON: { libelle: 'Brouillon', badge: 'badge-gris' },
+  VALIDE: { libelle: 'Validé', badge: 'badge-vert' },
+}
+
+/**
+ * RAPPORT CENTRE (PDF), présenté comme la fiche papier « Rapport commande
+ * mensuel recouvrables » (paysage). calcul(l) = calcul en direct de l'écran
+ * (FenetreRapportCentre.vue) : { theorique, sdu, pertes, cmm, moisStock, qac, montant }.
+ */
+export function rapportCentrePdf(r, calcul) {
+  const lignes = [...r.lignes].sort((a, b) => (a.medicament?.designation || '').localeCompare(b.medicament?.designation || ''))
+  const p = r.parametres || {}
+  const avecTransferts = lignes.some((l) => l.transferts !== 0)
+  const totalAVerser = lignes.reduce((t, l) => t + calcul(l).montant, 0)
+  const colonnes = [
+    { titre: 'Code produit', valeur: (l) => l.medicament?.code || '', largeur: 20 },
+    { titre: 'Désignation produit', valeur: (l) => l.medicament?.designation || '' },
+    { titre: 'Unité', valeur: (l) => l.medicament?.uniteVente?.libelle || l.medicament?.unite || '', largeur: 14 },
+    { titre: 'Stock initial', valeur: (l) => formaterNombre(l.stockInitial), droite: true, largeur: 13 },
+    { titre: 'Quantité reçue', valeur: (l) => formaterNombre(l.recu), droite: true, largeur: 13 },
+    ...(avecTransferts ? [{ titre: 'Transferts', valeur: (l) => formaterNombre(l.transferts), droite: true, largeur: 13 }] : []),
+    { titre: 'Quantité utilisée', valeur: (l) => formaterNombre(Number(l.consomme) || 0), droite: true, largeur: 14 },
+    { titre: 'Perte / Ajust.', valeur: (l) => formaterNombre(calcul(l).pertes), droite: true, largeur: 13 },
+    { titre: 'Stock disponible', valeur: (l) => formaterNombre(calcul(l).sdu), droite: true, largeur: 14 },
+    { titre: 'Jours de rupture', valeur: (l) => formaterNombre(Number(l.joursRupture) || 0), droite: true, largeur: 13 },
+    { titre: 'Consommation mensuelle', valeur: (l) => formaterNombre(calcul(l).cmm), droite: true, largeur: 17 },
+    { titre: 'Mois de stock dispo.', valeur: (l) => (calcul(l).moisStock === null ? '-' : formaterNombre(calcul(l).moisStock)), droite: true, largeur: 14 },
+    { titre: 'Quantité à commander', valeur: (l) => formaterNombre(calcul(l).qac), droite: true, largeur: 15 },
+    { titre: 'Quantité accordée', valeur: (l) => (l.quantiteAccordee === null || l.quantiteAccordee === undefined ? '' : formaterNombre(l.quantiteAccordee)), droite: true, largeur: 15 },
+    { titre: 'Montant à verser', valeur: (l) => formaterMontant(calcul(l).montant), droite: true, largeur: 22 },
+  ]
+  return exporterDocumentPdf({
+    titre: 'RAPPORT COMMANDE MENSUEL RECOUVRABLES',
+    numero: r.numero,
+    statut: STATUTS_RAPPORT_CENTRE[r.statut]?.libelle,
+    orientation: 'landscape',
+    policeTableau: 7,
+    encadres: [
+      {
+        titre: 'Établissement',
+        lignes: [
+          ['Région sanitaire', p.region],
+          ['District sanitaire', p.district],
+          ['Établissement', r.centre.nom],
+          ['Nom du service', 'PHARMACIE'],
+          ['Code client', r.centre.code],
+        ],
+      },
+      {
+        titre: 'Rapport',
+        lignes: [
+          ['Date', formaterDate(r.dateValidation || new Date())],
+          ['Mois de', libellePeriode(r.annee, r.mois).toUpperCase()],
+          ['Facture', r.facture?.numero || '—'],
+        ],
+      },
+      {
+        titre: 'Niveaux de stock',
+        lignes: [
+          ['Stock maximum', `${formaterNombre(p.n)} mois`],
+          ['Stock minimum', `${formaterNombre(p.moisStockMin)} mois`],
+          ['Cde urgente', `${formaterNombre(p.moisCommandeUrgente)} mois`],
+          ['Délai réappro.', `${formaterNombre(p.delaiReappro)} mois`],
+        ],
+      },
+    ],
+    colonnes,
+    lignes,
+    total: { libelle: 'MONTANT TOTAL À VERSER', valeur: formaterMontant(totalAVerser) },
+    observations: r.observations || '',
+    signatures: [
+      { libelle: "L'agent du district", nom: nomPersonne(r.validateur) || nomPersonne(r.utilisateur) },
+      'Le responsable du centre',
+    ],
+    nomFichier: `rapport_centre_${r.numero}`,
+  })
+}

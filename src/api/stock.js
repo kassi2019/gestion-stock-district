@@ -76,3 +76,23 @@ export async function resumeAlertes() {
 export async function modifierSeuil(medicamentId, seuilAlerte) {
   return (await http.patch(`/stock/seuil/${medicamentId}`, { seuilAlerte })).data
 }
+
+// ----------------------------------------------------------------------------
+// INVENTAIRE INITIAL (mise en service) — administrateur seulement
+// entite = 'district' ou identifiant du centre de santé
+// ----------------------------------------------------------------------------
+
+/** Vue d'ensemble : { verrouille, entites: [{ centreId, nom, nbLignes, dateInventaire }] } */
+export async function etatInventaireInitial() {
+  return (await http.get('/inventaire-initial')).data
+}
+
+/** Lignes d'une entité : { verrouille, source ('INVENTAIRE' | 'STOCK_ACTUEL'), dateInventaire, lignes } */
+export async function lireInventaireInitial(entite) {
+  return (await http.get(`/inventaire-initial/${entite}`)).data
+}
+
+/** Enregistre l'inventaire d'une entité : { dateInventaire, lignes: [{ medicamentId, quantite, numeroLot?, datePeremption? }] } */
+export async function enregistrerInventaireInitial(entite, donnees) {
+  return (await http.put(`/inventaire-initial/${entite}`, donnees)).data
+}

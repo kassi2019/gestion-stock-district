@@ -11,7 +11,10 @@
                             (ajustement, périmés, transfert) avec motif ;
     - OngletInventaires.vue inventaire PAR LOT (comme la pharmacie Clinique) :
                             comptage, corrections de lot, retraits, ajout et
-                            rattachement de lot, fiche d'inventaire.
+                            rattachement de lot, fiche d'inventaire ;
+    - OngletInventaireInitial.vue  INVENTAIRE INITIAL (mise en service) :
+                            stock de départ du district et des centres —
+                            ADMINISTRATEUR seulement (spec nov. 2026, §2).
 
   L'état du stock et le délai d'alerte de péremption (Paramètres généraux)
   sont chargés ICI une seule fois et partagés ; ils sont rechargés après un
@@ -54,6 +57,7 @@
         />
         <OngletMouvements v-else-if="ongletActif === 'mouvements'" :etat="etat" @modifie="charger" />
         <OngletInventaires v-else-if="ongletActif === 'inventaires'" :etat="etat" :delai-alerte="delaiAlerte" @modifie="charger" />
+        <OngletInventaireInitial v-else-if="ongletActif === 'initial'" @modifie="charger" />
       </template>
     </section>
   </div>
@@ -69,18 +73,22 @@ import OngletEtat from './OngletEtat.vue'
 import OngletAlertes from './OngletAlertes.vue'
 import OngletMouvements from './OngletMouvements.vue'
 import OngletInventaires from './OngletInventaires.vue'
+import OngletInventaireInitial from './OngletInventaireInitial.vue'
 import { etatStock } from '@/api/stock'
 import { listerParametres } from '@/api/parametrage'
 import { etatMedicament, etatPeremption } from './stockCommun'
 
+const store = useStore()
+
+/** L'onglet « Inventaire initial » est réservé à l'administrateur. */
 const ONGLETS = [
   { code: 'etat', titre: 'État du stock', icone: 'carton' },
   { code: 'alertes', titre: 'Alertes', icone: 'alerte' },
   { code: 'mouvements', titre: 'Mouvements', icone: 'graphique' },
   { code: 'inventaires', titre: 'Inventaire', icone: 'presse-papier' },
+  ...(store.getters['auth/role'] === 'ADMIN' ? [{ code: 'initial', titre: 'Inventaire initial', icone: 'presse-papier' }] : []),
 ]
 
-const store = useStore()
 const route = useRoute()
 const router = useRouter()
 

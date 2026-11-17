@@ -72,6 +72,93 @@ const nombreLignes = (titre = 'Lignes') => ({ titre, valeur: (l) => formaterNomb
 // LES ÉTATS
 // ---------------------------------------------------------------------------
 export const ETATS = [
+  // ======================= RAPPORT DISTRICT (spec nov. 2026, §6) =======================
+  // Une seule route serveur (rapport-district) pour les deux états :
+  // { produits: [...une ligne par produit], fournisseurs: [...fournisseur x produit] }
+  {
+    code: 'rapport-district-quantites',
+    groupe: 'Rapport district',
+    titre: 'Rapport district — quantités',
+    description:
+      "Consolidation des rapports centre validés et du stock du district. Sert de rapport de commande à reporter dans l'application nationale.",
+    source: 'rapport-district',
+    filtres: ['periode', 'centre', 'medicament'],
+    vues: [
+      {
+        code: 'produit',
+        libelle: 'Par produit',
+        lignes: (d) => d.produits,
+        colonnes: [
+          medicament,
+          quantite('Consommé par les centres', (l) => l.consommeCentres),
+          quantite('Restant dans les centres', (l) => l.restantCentres),
+          quantite('Restant au district', (l) => l.restantDistrict),
+          quantite('Stock global', (l) => l.stockGlobal),
+          quantite('Reçu des fournisseurs', (l) => l.recuFournisseurs),
+          quantite('CMM district', (l) => l.cmmDistrict),
+        ],
+      },
+    ],
+  },
+  {
+    code: 'rapport-district-valorisation',
+    groupe: 'Rapport district',
+    titre: 'Rapport district — valorisation',
+    description:
+      "Consommation valorisée aux prix figés des rapports : marge du district, pertes (au prix d'achat) et montant dû aux fournisseurs (premier entré, premier sorti).",
+    source: 'rapport-district',
+    filtres: ['periode', 'centre', 'medicament'],
+    vues: [
+      {
+        code: 'synthese',
+        libelle: 'Synthèse',
+        // Les pertes sont sur une ligne à part : elles réduisent la marge
+        lignes: (d) => [
+          {
+            libelle: 'Consommation des centres',
+            achat: d.produits.reduce((t, l) => t + l.valeurAchat, 0),
+            vente: d.produits.reduce((t, l) => t + l.valeurVente, 0),
+            marge: d.produits.reduce((t, l) => t + l.marge, 0),
+          },
+          {
+            libelle: "Pertes et périmés (au prix d'achat)",
+            achat: d.produits.reduce((t, l) => t + l.valeurPertes, 0),
+            vente: 0,
+            marge: -d.produits.reduce((t, l) => t + l.valeurPertes, 0),
+          },
+        ],
+        colonnes: [libelle('Poste'), montant("Valeur au prix d'achat", (l) => l.achat), montant('Valeur au prix de vente', (l) => l.vente), montant('Marge du district', (l) => l.marge)],
+      },
+      {
+        code: 'produit',
+        libelle: 'Par produit',
+        lignes: (d) => d.produits.filter((l) => l.consommeCentres || l.pertes),
+        colonnes: [
+          medicament,
+          quantite('Consommé', (l) => l.consommeCentres),
+          montant("Valeur au prix d'achat", (l) => l.valeurAchat),
+          montant('Valeur au prix de vente', (l) => l.valeurVente),
+          montant('Marge', (l) => l.marge),
+          quantite('Pertes / ajust.', (l) => l.pertes),
+          montant('Valeur des pertes', (l) => l.valeurPertes),
+          montant('Marge nette', (l) => l.margeNette),
+        ],
+      },
+      {
+        code: 'fournisseur',
+        libelle: 'Dû aux fournisseurs',
+        lignes: (d) => grouper(d.fournisseurs, (l) => l.fournisseur, { montant: (l) => l.montant, quantite: (l) => l.quantite }),
+        colonnes: [libelle('Fournisseur'), nombreLignes('Produits'), quantite('Quantité consommée', (l) => l.quantite), montant('Montant dû', (l) => l.montant)],
+      },
+      {
+        code: 'fournisseur-produit',
+        libelle: 'Dû par fournisseur et produit',
+        lignes: (d) => d.fournisseurs,
+        colonnes: [texte('Fournisseur', (l) => l.fournisseur), medicament, quantite('Quantité consommée', (l) => l.quantite), montant('Montant dû', (l) => l.montant)],
+      },
+    ],
+  },
+
   // ======================= STOCK ET MOUVEMENTS =======================
   {
     code: 'stock',

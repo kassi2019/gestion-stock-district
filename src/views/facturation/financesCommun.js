@@ -35,8 +35,21 @@ export function periodeRapport(r) {
   return r ? `${MOIS[r.mois - 1]} ${r.annee}` : ''
 }
 
-/** Objet d'une facture : consommation d'un mois, ou écart de supervision. */
+/** Origine d'une facture-sortie (spec nov. 2026). */
+export const ORIGINES_FACTURE = {
+  RAPPORT: 'Suite au rapport',
+  MANUELLE: 'Manuelle (complément)',
+}
+
+/**
+ * Objet d'une facture :
+ *   - facture-sortie : livraison suite au rapport du centre, ou complément manuel ;
+ *   - ancien circuit : consommation d'un mois, ou écart de supervision.
+ */
 export function objetFacture(f) {
+  if (f.type === 'SORTIE') {
+    return f.origine === 'RAPPORT' && f.rapport ? `Livraison suite au rapport de ${periodeRapport(f.rapport)}` : 'Livraison complémentaire'
+  }
   if (f.rapport) return `Consommation de ${periodeRapport(f.rapport)}`
   if (f.supervision) return `Écart de supervision ${f.supervision.numero}`
   return f.type === 'ECART_SUPERVISION' ? 'Écart de supervision' : '—'
@@ -81,6 +94,8 @@ export function facturePdf(f) {
       { titre: 'N°', valeur: (l) => f.lignes.indexOf(l) + 1, largeur: 9 },
       { titre: 'Médicament', valeur: (l) => `${l.medicament.code} — ${l.medicament.designation}` },
       { titre: 'Unité', valeur: (l) => l.medicament.uniteVente?.libelle || '', largeur: 20 },
+      // Facture-sortie : lot livré
+      ...(f.sortieStock ? [{ titre: 'Lot', valeur: (l) => l.lot?.numeroLot || '—', largeur: 24 }] : []),
       { titre: 'Quantité', valeur: (l) => formaterNombre(l.quantite), droite: true, largeur: 20 },
       { titre: 'Prix unitaire', valeur: (l) => formaterMontant(l.prixUnitaire), droite: true, largeur: 28 },
       { titre: 'Montant', valeur: (l) => formaterMontant(l.montant), droite: true, largeur: 30 },

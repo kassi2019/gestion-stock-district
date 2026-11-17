@@ -3,7 +3,7 @@
  * APPELS API : PIÈCES JUSTIFICATIVES (fichiers joints aux documents)
  * =============================================================================
  * Chaque module a ses propres routes (et donc ses propres droits) :
- *   - module 'achats' : commandes ('CommandeFournisseur'), réceptions ('Reception')
+ *   - module 'achats' : réceptions ('Reception')
  *   - module 'stock'  : mouvements ('MouvementStock'), inventaires ('InventaireDepot')
  * =============================================================================
  */

@@ -128,6 +128,7 @@
               v-model="valeurs[parametre.cle]"
               type="number"
               min="0"
+              step="any"
             />
             <input v-else v-model="valeurs[parametre.cle]" type="text" />
           </div>
@@ -175,6 +176,12 @@ const DESCRIPTIONS = {
   PRIX_VENTE_PAR_CENTRE: { libelle: 'Prix de vente spécifiques par centre', type: 'ouiNon' },
   SORTIE_AUTO_PERIMES: { libelle: 'Sortie automatique des lots périmés (chaque nuit)', type: 'ouiNon' },
   DELAI_PAIEMENT_JOURS: { libelle: 'Délai de paiement des factures (jours après émission)', type: 'nombre' },
+  // Rapport centre de santé (fiche « Rapport commande mensuel recouvrables »)
+  MOIS_STOCK_MAX: { libelle: 'Rapport centre : niveau de stock maximum (mois)', type: 'nombre' },
+  MOIS_STOCK_MIN: { libelle: 'Rapport centre : niveau de stock minimum (mois)', type: 'nombre' },
+  MOIS_POINT_COMMANDE_URGENTE: { libelle: 'Rapport centre : point de commande urgente (mois)', type: 'nombre' },
+  DELAI_REAPPRO_MOIS: { libelle: 'Rapport centre : délai de réapprovisionnement (mois)', type: 'nombre' },
+  MOIS_CMM: { libelle: 'Rapport centre : nombre de mois pour la CMM', type: 'nombre' },
   VALORISATION_ECARTS: {
     libelle: 'Valorisation des écarts de supervision',
     type: 'choix',

@@ -29,6 +29,8 @@
  *         'Le livreur',                                               // texte seul : nom à écrire à la main
  *       ],
  *       nomFichier: 'bon_commande_BCF-2026-00001',
+ *       orientation: 'landscape',                    // facultatif (défaut : portrait)
+ *       policeTableau: 7,                            // facultatif (défaut : 8.8)
  *     })
  * =============================================================================
  */
@@ -62,6 +64,8 @@ export async function exporterDocumentPdf({
   observations = '',
   signatures = [],
   nomFichier,
+  orientation = 'portrait', // 'landscape' pour les tableaux larges (ex. rapport centre)
+  policeTableau = 8.8, // taille du texte du tableau (plus petit = plus de colonnes)
 }) {
   const [{ jsPDF }, { autoTable }, district] = await Promise.all([
     import('jspdf'),
@@ -69,7 +73,7 @@ export async function exporterDocumentPdf({
     infosDistrict(),
   ])
 
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const doc = new jsPDF({ orientation, unit: 'mm', format: 'a4' })
   const largeur = doc.internal.pageSize.getWidth()
   const hauteur = doc.internal.pageSize.getHeight()
   const marge = 14
@@ -184,7 +188,7 @@ export async function exporterDocumentPdf({
     foot: pied,
     showFoot: 'lastPage',
     theme: 'grid',
-    styles: { font: 'helvetica', fontSize: 8.8, cellPadding: 2.4, textColor: TEXTE, lineColor: [229, 231, 235], lineWidth: 0.2 },
+    styles: { font: 'helvetica', fontSize: policeTableau, cellPadding: policeTableau < 8 ? 1.4 : 2.4, textColor: TEXTE, lineColor: [229, 231, 235], lineWidth: 0.2 },
     headStyles: { fillColor: VERT, textColor: [255, 255, 255], fontStyle: 'bold' },
     footStyles: { fillColor: [227, 245, 236], textColor: VERT_FONCE, fontStyle: 'bold', fontSize: 10 },
     alternateRowStyles: { fillColor: VERT_PALE },

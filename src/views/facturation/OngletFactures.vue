@@ -4,11 +4,19 @@
   =============================================================================
   Factures des centres (cahier des charges §3.6) : numérotation, archivage,
   impression PDF, montant facturé / payé / solde, échéance (en rouge si dépassée).
+  SPEC NOV. 2026 : une facture = une SORTIE de stock du district vers un centre
+  (plusieurs par mois), de deux sortes :
+    - « + Facture générée » : fin de mois, à partir du rapport VALIDÉ du centre
+      (quantités calculées, validées ou réduites) -> FenetreFactureGeneree.vue ;
+    - « + Facture manuelle » : en cours de mois, produits ajoutés un par un,
+      sans rapport -> FenetreFactureManuelle.vue.
   Détail : lignes, paiements imputés, et actions :
     - « Utiliser les avances » : impute les avances disponibles du centre ;
     - « Enregistrer un paiement » : ouvre Paiements avec le centre et la facture ;
-    - « Annuler la facture » (motif ; seulement si aucun paiement imputé :
-      le rapport redevient « validé » et peut être refacturé).
+    - « Annuler la facture » (motif ; seulement si aucun paiement imputé).
+      Facture-sortie : le stock revient au district (refusé si le rapport du
+      centre pour ce mois est déjà validé). Ancienne facture : le rapport
+      redevient « validé » et peut être refacturé.
   =============================================================================
 -->
 <template>
@@ -29,6 +37,8 @@
       <label class="case-a-cocher"><input v-model="enRetardSeulement" type="checkbox" /> En retard</label>
       <span class="espace"></span>
       <ImportExportTableau titre="Factures" :sous-titre="sousTitrePdf" nom-fichier="factures" :colonnes-pdf="COLONNES_PDF" :lignes="lignesTriees" />
+      <button v-si-modif @click="nouvelleGeneree = true">+ Facture générée</button>
+      <button v-si-modif @click="nouvelleManuelle = true">+ Facture manuelle</button>
     </div>
 
     <div class="totaux">
@@ -93,28 +103,36 @@
         <div><span>Échéance</span><strong>{{ detail.dateEcheance ? formaterDate(detail.dateEcheance) : '—' }}</strong></div>
         <div><span>Objet</span><strong>{{ objetFacture(detail) }}{{ detail.rapport ? ` (${detail.rapport.numero})` : '' }}</strong></div>
         <div><span>Établie par</span><strong>{{ nomPersonne(detail.utilisateur) }}</strong></div>
+        <div v-if="detail.sortieStock"><span>Origine</span><strong>{{ ORIGINES_FACTURE[detail.origine] || '—' }}</strong></div>
         <div><span>Montant</span><strong>{{ formaterMontant(detail.montantTotal) }}</strong></div>
         <div><span>Payé</span><strong>{{ formaterMontant(detail.montantPaye) }}</strong></div>
         <div><span>Reste à payer</span><strong :class="{ rouge: detail.solde > 0 }">{{ formaterMontant(detail.solde) }}</strong></div>
         <div v-if="detail.solde > 0"><span>Avances du centre</span><strong>{{ formaterMontant(detail.avancesDisponibles) }}</strong></div>
       </div>
 
-      <h4 class="section">Médicaments facturés</h4>
+      <h4 class="section">{{ detail.sortieStock ? 'Produits livrés (sortis du stock du district)' : 'Médicaments facturés' }}</h4>
       <table class="tableau lignes">
         <thead>
-          <tr><th>Médicament</th><th>Unité</th><th class="nombre">Quantité</th><th class="nombre">Prix unitaire</th><th class="nombre">Montant</th></tr>
+          <tr>
+            <th>Médicament</th><th>Unité</th>
+            <th v-if="detail.sortieStock">Lot</th>
+            <th class="nombre">Quantité</th><th class="nombre">Prix unitaire</th><th class="nombre">Montant</th>
+          </tr>
         </thead>
         <tbody>
           <tr v-for="l in detail.lignes" :key="l.id">
             <td>{{ l.medicament.code }} — {{ l.medicament.designation }}</td>
             <td>{{ l.medicament.uniteVente?.libelle || '' }}</td>
+            <td v-if="detail.sortieStock">
+              {{ l.lot?.numeroLot || '—' }}<small v-if="l.lot?.datePeremption" class="detail-lot"> (exp. {{ formaterDate(l.lot.datePeremption) }})</small>
+            </td>
             <td class="nombre">{{ formaterNombre(l.quantite) }}</td>
             <td class="nombre">{{ formaterMontant(l.prixUnitaire) }}</td>
             <td class="nombre">{{ formaterMontant(l.montant) }}</td>
           </tr>
         </tbody>
         <tfoot>
-          <tr><td colspan="4" class="nombre"><strong>MONTANT TOTAL</strong></td><td class="nombre"><strong>{{ formaterMontant(detail.montantTotal) }}</strong></td></tr>
+          <tr><td :colspan="detail.sortieStock ? 5 : 4" class="nombre"><strong>MONTANT TOTAL</strong></td><td class="nombre"><strong>{{ formaterMontant(detail.montantTotal) }}</strong></td></tr>
         </tfoot>
       </table>
 
@@ -149,6 +167,12 @@
         </template>
       </template>
     </FenetreModale>
+
+    <!-- ===================== NOUVELLE FACTURE MANUELLE ===================== -->
+    <FenetreFactureManuelle v-if="nouvelleManuelle" @fermer="nouvelleManuelle = false" @creee="apresCreation" />
+
+    <!-- ===================== NOUVELLE FACTURE GÉNÉRÉE (rapport du centre) ===================== -->
+    <FenetreFactureGeneree v-if="nouvelleGeneree" @fermer="nouvelleGeneree = false" @creee="apresCreation" />
   </div>
 </template>
 
@@ -161,12 +185,14 @@ import ListeDeroulante from '@/components/ListeDeroulante.vue'
 import ImportExportTableau from '@/components/ImportExportTableau.vue'
 import Pagination from '@/components/Pagination.vue'
 import ColonneTri from '@/components/ColonneTri.vue'
+import FenetreFactureManuelle from './FenetreFactureManuelle.vue'
+import FenetreFactureGeneree from './FenetreFactureGeneree.vue'
 import { utiliserTableau } from '@/utils/pagination'
 import { confirmer, demanderTexte } from '@/utils/alertes'
 import { nomPersonne } from '@/utils/documentPdf'
 import { formaterDate, formaterMontant, formaterNombre } from '@/utils/format'
 import { annulerFacture, imputerAvancesSurFacture, listerFactures, trouverFacture } from '@/api/facturation'
-import { facturePdf, MODES_PAIEMENT, objetFacture, options, STATUTS_FACTURE } from './financesCommun'
+import { facturePdf, MODES_PAIEMENT, objetFacture, options, ORIGINES_FACTURE, STATUTS_FACTURE } from './financesCommun'
 
 const props = defineProps({
   /** Ids des factures à mettre en avant / ouvrir (après génération) */
@@ -182,6 +208,8 @@ const recherche = ref('')
 const enRetardSeulement = ref(false)
 const filtres = reactive({ centreId: null, statut: null, du: '', au: '' })
 const detail = ref(null)
+const nouvelleManuelle = ref(false)
+const nouvelleGeneree = ref(false)
 
 const centres = computed(() => store.state.referentiel.centres)
 const peutModifierPaiements = computed(() => store.getters['auth/peutModifier']('paiements'))
@@ -238,10 +266,21 @@ async function imprimer(f) {
   }
 }
 
+/** Facture (manuelle ou générée) créée : liste rechargée et facture ouverte. */
+async function apresCreation(facture) {
+  nouvelleManuelle.value = false
+  nouvelleGeneree.value = false
+  await charger()
+  detail.value = facture
+}
+
 async function annuler() {
+  const texte = detail.value.sortieStock
+    ? "Elle restera dans l'historique avec le statut « Annulée ». Les produits REVIENNENT dans le stock du district (mêmes lots) et sortent du stock du centre."
+    : "Elle restera dans l'historique avec le statut « Annulée ». Le rapport de consommation redeviendra « validé » et pourra être refacturé."
   const motif = await demanderTexte({
     titre: `Annuler la facture ${detail.value.numero} ?`,
-    texte: 'Elle restera dans l\'historique avec le statut « Annulée ». Le rapport de consommation redeviendra « validé » et pourra être refacturé.',
+    texte,
     libelle: "Motif de l'annulation",
     boutonConfirmer: 'Annuler la facture',
   })
@@ -353,5 +392,6 @@ defineExpose({ charger })
 .section { margin: 0.75rem 0 0.5rem; padding-bottom: 0.35rem; border-bottom: 1px solid var(--border); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--primary); }
 .lignes tfoot td { border-top: 2px solid var(--border); padding-top: 0.6rem; }
 .aide { font-size: 0.85rem; color: var(--muted); }
+.detail-lot { font-size: 0.75rem; color: var(--muted); }
 @media (max-width: 1000px) { .totaux, .fiche { grid-template-columns: 1fr 1fr; } }
 </style>

@@ -1,32 +1,29 @@
 <!--
   =============================================================================
-  MODULE 03 — APPROVISIONNEMENTS ET ACHATS DU DISTRICT (page avec onglets)
+  MODULE 03 — RÉCEPTION FOURNISSEURS (page avec onglets) — spec nov. 2026, §3
   =============================================================================
-  Circuit d'achat (cahier des charges §3.2 et §4, étapes 1-2) :
-    1. COMMANDE au fournisseur (bon de commande)        -> OngletCommandes.vue
-    2. RÉCEPTION des médicaments, totale ou partielle, avec lots et
-       péremptions ; sa VALIDATION fait entrer le stock -> OngletReceptions.vue
-    3. HISTORIQUE des achats par fournisseur, médicament, période
+  Le district commande dans l'application nationale : ici, on enregistre
+  seulement ce qui est REÇU des fournisseurs.
+    1. RÉCEPTION des médicaments (lots, péremptions, prix d'achat repris des
+       paramètres) ; sa VALIDATION fait entrer le stock -> OngletReceptions.vue
+    2. HISTORIQUE des achats par fournisseur, médicament, période
                                                          -> OngletHistorique.vue
-  Pièces justificatives (facture, bon de livraison...) sur les commandes et
-  les réceptions. Droits : module « achats » (Voir / Imprimer / Modifier).
+  Droits : module « achats » (Voir / Imprimer / Modifier).
   =============================================================================
 -->
 <template>
   <div class="page-achats">
     <EnteteModule
       icone="panier"
-      titre="Approvisionnements et achats"
-      description="Commandes aux fournisseurs, réceptions au dépôt et historique des achats du district."
+      titre="Réception fournisseurs"
+      description="Livraisons reçues des fournisseurs du district et historique des achats."
     />
 
-    <!-- Circuit en 3 étapes (rappel visuel) -->
+    <!-- Circuit (rappel visuel) -->
     <div class="circuit">
-      <div class="etape"><span>1</span> Commande au fournisseur</div>
+      <div class="etape"><span>1</span> Réception (lots, péremptions)</div>
       <Icone nom="fleche" :taille="18" />
-      <div class="etape"><span>2</span> Réception (lots, péremptions)</div>
-      <Icone nom="fleche" :taille="18" />
-      <div class="etape forte"><span>3</span> Validation = entrée en stock</div>
+      <div class="etape forte"><span>2</span> Validation = entrée en stock</div>
     </div>
 
     <nav class="onglets">
@@ -43,11 +40,7 @@
     </nav>
 
     <section class="bloc">
-      <OngletCommandes v-if="ongletActif === 'commandes'" @receptionner="receptionner" />
-      <OngletReceptions
-        v-else-if="ongletActif === 'receptions'"
-        :commande-a-receptionner="commandeAReceptionner"
-      />
+      <OngletReceptions v-if="ongletActif === 'receptions'" />
       <OngletHistorique v-else-if="ongletActif === 'historique'" />
     </section>
   </div>
@@ -58,12 +51,10 @@ import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import EnteteModule from '@/components/EnteteModule.vue'
 import Icone from '@/components/Icone.vue'
-import OngletCommandes from './OngletCommandes.vue'
 import OngletReceptions from './OngletReceptions.vue'
 import OngletHistorique from './OngletHistorique.vue'
 
 const ONGLETS = [
-  { code: 'commandes', titre: 'Commandes fournisseurs', icone: 'facture' },
   { code: 'receptions', titre: 'Réceptions', icone: 'carton' },
   { code: 'historique', titre: 'Historique des achats', icone: 'graphique' },
 ]
@@ -75,15 +66,6 @@ const router = useRouter()
 const ongletActif = ref(ONGLETS.some((o) => o.code === route.query.onglet) ? route.query.onglet : ONGLETS[0].code)
 watch(ongletActif, (code) => router.replace({ query: { onglet: code } }))
 
-// Commande à réceptionner (bouton « Réceptionner » de l'onglet Commandes)
-const commandeAReceptionner = ref(null)
-function receptionner(commande) {
-  commandeAReceptionner.value = { ...commande } // nouvel objet : relance même pour la même commande
-  ongletActif.value = 'receptions'
-}
-watch(ongletActif, (code) => {
-  if (code !== 'receptions') commandeAReceptionner.value = null
-})
 </script>
 
 <style scoped>

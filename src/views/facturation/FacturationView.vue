@@ -2,9 +2,12 @@
   =============================================================================
   MODULE 07a — FACTURATION (page avec onglets)
   =============================================================================
-  Cahier des charges §3.6 :
-    - À FACTURER : rapports de consommation validés -> génération des factures
-                                                      -> OngletAFacturer.vue
+  Spec nov. 2026 : une facture = une SORTIE de stock du district vers un
+  centre (générée par le rapport centre, ou manuelle en cours de mois).
+    - À FACTURER : ANCIEN circuit seulement (rapports de consommation validés
+                   avant la refonte, pas encore facturés) -> OngletAFacturer.vue
+                   Onglet AFFICHÉ SEULEMENT s'il en reste (pour ne pas le
+                   confondre avec le bouton « + Facture générée »).
     - FACTURES   : numérotation, archivage, PDF, montant payé et solde,
                    échéances, annulation tracée      -> OngletFactures.vue
   Paiements, avances et comptes des centres : module « Paiements & comptes ».
@@ -16,20 +19,21 @@
     <EnteteModule
       icone="facture"
       titre="Facturation"
-      description="Factures mensuelles des centres, générées à partir des rapports de consommation validés."
+      description="Sorties du district vers les centres de santé : factures issues des rapports et factures manuelles."
     />
 
     <div class="circuit">
-      <div class="etape"><span>1</span> Rapport de consommation validé</div>
+      <div class="etape"><span>1</span> Rapport centre validé ou facture manuelle</div>
       <Icone nom="fleche" :taille="18" />
-      <div class="etape forte"><span>2</span> Génération de la facture</div>
+      <div class="etape forte"><span>2</span> Facture = sortie du stock du district</div>
       <Icone nom="fleche" :taille="18" />
       <div class="etape"><span>3</span> Paiements (module Paiements & comptes)</div>
     </div>
 
-    <nav class="onglets">
+    <!-- Onglets : affichés seulement s'il en existe plus d'un -->
+    <nav v-if="ongletsVisibles.length > 1" class="onglets">
       <button
-        v-for="onglet in ONGLETS"
+        v-for="onglet in ongletsVisibles"
         :key="onglet.code"
         class="onglet"
         :class="{ actif: ongletActif === onglet.code }"
@@ -49,7 +53,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import EnteteModule from '@/components/EnteteModule.vue'
 import Icone from '@/components/Icone.vue'
@@ -59,7 +63,7 @@ import { rapportsAFacturer } from '@/api/facturation'
 
 const ONGLETS = [
   { code: 'factures', titre: 'Factures', icone: 'facture' },
-  { code: 'a-facturer', titre: 'À facturer', icone: 'presse-papier' },
+  { code: 'a-facturer', titre: 'Anciens rapports à facturer', icone: 'presse-papier' },
 ]
 
 const route = useRoute()
@@ -75,8 +79,13 @@ async function compter() {
   } catch {
     nombreAFacturer.value = 0
   }
+  // Plus rien à facturer alors qu'on est sur cet onglet : retour aux factures
+  if (nombreAFacturer.value === 0 && ongletActif.value === 'a-facturer') ongletActif.value = 'factures'
 }
 onMounted(compter)
+
+// L'onglet des anciens rapports n'apparaît que s'il en reste à facturer
+const ongletsVisibles = computed(() => ONGLETS.filter((o) => o.code !== 'a-facturer' || nombreAFacturer.value > 0))
 
 // Après génération : onglet Factures, première facture ouverte
 const factureAOuvrir = ref(null)

@@ -1,14 +1,14 @@
 <!--
   =============================================================================
-  MODULE 06 — RAPPORTS MENSUELS DE CONSOMMATION (page avec onglets)
+  MODULE 06 — RAPPORTS CENTRE DE SANTÉ (page avec onglets) — spec nov. 2026, §5
   =============================================================================
-  Circuit (cahier des charges §3.5) :
-    1. SAISIE du rapport transmis par le centre (quantités déclarées, valorisées
-       au prix de vente applicable)                       -> OngletRapports.vue
-    2. VÉRIFICATION SUR PLACE par l'agent du district (quantités constatées ;
-       la quantité vérifiée est retenue)                   -> OngletRapports.vue
-    3. VALIDATION = déduction du stock théorique du centre, puis facturation
-    4. SUIVI des déclarations (qui a déclaré, qui manque)  -> OngletSuivi.vue
+  Le rapport mensuel REMPLACE LA COMMANDE du centre : le district saisit la
+  consommation, l'application calcule le stock restant et la quantité à livrer.
+    1. RAPPORTS CENTRE : saisie, calculs, validation -> facture-sortie
+                                                       -> OngletRapportsCentre.vue
+    2. SUIVI des rapports (centres × mois)             -> OngletSuivi.vue
+    3. ANCIENS RAPPORTS (ancien circuit : déclaration du centre, vérification
+       sur place), consultables jusqu'au nettoyage     -> OngletRapports.vue
   Droits : module « consommations » (Voir / Imprimer / Modifier).
   =============================================================================
 -->
@@ -16,19 +16,17 @@
   <div class="page-consommations">
     <EnteteModule
       icone="presse-papier"
-      titre="Rapports mensuels de consommation"
-      description="Saisie des consommations déclarées par les centres, vérification sur place et validation."
+      titre="Rapports centre de santé"
+      description="Consommation mensuelle de chaque centre, stock restant et quantité à livrer."
     />
 
     <!-- Circuit (rappel visuel) -->
     <div class="circuit">
-      <div class="etape"><span>1</span> Saisie du rapport du centre</div>
+      <div class="etape"><span>1</span> Saisie de C et P par le district</div>
       <Icone nom="fleche" :taille="18" />
-      <div class="etape"><span>2</span> Vérification sur place (agent du district)</div>
+      <div class="etape"><span>2</span> SDU, CMM et quantité à livrer calculés</div>
       <Icone nom="fleche" :taille="18" />
-      <div class="etape forte"><span>3</span> Validation = déduction du stock du centre</div>
-      <Icone nom="fleche" :taille="18" />
-      <div class="etape"><span>4</span> Facturation</div>
+      <div class="etape forte"><span>3</span> Validation = facture-sortie</div>
     </div>
 
     <nav class="onglets">
@@ -45,8 +43,9 @@
     </nav>
 
     <section class="bloc">
-      <OngletRapports v-if="ongletActif === 'rapports'" :a-ouvrir="aOuvrir" />
+      <OngletRapportsCentre v-if="ongletActif === 'rapports-centre'" :a-ouvrir="aOuvrir" />
       <OngletSuivi v-else-if="ongletActif === 'suivi'" @ouvrir="ouvrirRapport" />
+      <OngletRapports v-else-if="ongletActif === 'rapports'" />
     </section>
   </div>
 </template>
@@ -57,11 +56,13 @@ import { useRoute, useRouter } from 'vue-router'
 import EnteteModule from '@/components/EnteteModule.vue'
 import Icone from '@/components/Icone.vue'
 import OngletRapports from './OngletRapports.vue'
+import OngletRapportsCentre from './OngletRapportsCentre.vue'
 import OngletSuivi from './OngletSuivi.vue'
 
 const ONGLETS = [
-  { code: 'rapports', titre: 'Rapports mensuels', icone: 'presse-papier' },
-  { code: 'suivi', titre: 'Suivi des déclarations', icone: 'graphique' },
+  { code: 'rapports-centre', titre: 'Rapports centre', icone: 'presse-papier' },
+  { code: 'suivi', titre: 'Suivi des rapports', icone: 'graphique' },
+  { code: 'rapports', titre: 'Anciens rapports', icone: 'facture' },
 ]
 
 const route = useRoute()
@@ -73,10 +74,10 @@ watch(ongletActif, (code) => router.replace({ query: { onglet: code } }))
 const aOuvrir = ref(null)
 function ouvrirRapport(rapport) {
   aOuvrir.value = { ...rapport } // nouvel objet : relance même pour le même rapport
-  ongletActif.value = 'rapports'
+  ongletActif.value = 'rapports-centre'
 }
 watch(ongletActif, (code) => {
-  if (code !== 'rapports') aOuvrir.value = null
+  if (code !== 'rapports-centre') aOuvrir.value = null
 })
 </script>
 

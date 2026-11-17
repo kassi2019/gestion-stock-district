@@ -104,7 +104,7 @@
       <form id="form-supervision" class="grille-formulaire" @submit.prevent="enregistrer(false)">
         <div>
           <label class="obligatoire">Centre de santé</label>
-          <ListeDeroulante v-model="formulaire.centreId" :options="centresActifs" champ-libelle="nom" placeholder="— Choisir le centre —" :desactive="lectureSeule" @update:model-value="chargerPreparation" />
+          <ListeDeroulante v-model="formulaire.centreId" :options="centresActifs" champ-libelle="nom" placeholder="— Choisir le centre —" :desactive="lectureSeule" @update:model-value="changerCentre" />
         </div>
         <div>
           <label class="obligatoire">Date du contrôle</label>
@@ -114,12 +114,25 @@
         <!-- Agents présents -->
         <div class="pleine-largeur">
           <h4 class="section">Agents présents</h4>
-          <div v-for="(agent, i) in formulaire.agents" :key="i" class="ligne-agent">
-            <input v-model.trim="agent.nom" maxlength="150" placeholder="Nom et prénoms" :disabled="lectureSeule" />
+          <p v-if="!lectureSeule" class="aide-agents">
+            Choisissez dans le personnel du district (et du centre choisi). Pour une personne qui n'y figure pas : « Autre personne (saisie libre) ».
+          </p>
+          <div v-for="(agent, i) in formulaire.agents" :key="i" class="ligne-agent" :class="{ libre: !lectureSeule && agent.choix === AUTRE }">
+            <!-- Lecture seule : simple texte -->
+            <input v-if="lectureSeule" :value="agent.nom" disabled />
+            <ListeDeroulante
+              v-else
+              v-model="agent.choix"
+              :options="optionsAgents"
+              placeholder="— Choisir l'agent —"
+              @update:model-value="choisirAgent(agent)"
+            />
+            <!-- Personne hors liste : nom saisi à la main -->
+            <input v-if="!lectureSeule && agent.choix === AUTRE" v-model.trim="agent.nom" maxlength="150" placeholder="Nom et prénoms" />
             <input v-model.trim="agent.fonction" maxlength="100" placeholder="Fonction (ex. superviseur district, major du centre)" :disabled="lectureSeule" />
             <button v-if="!lectureSeule && formulaire.agents.length > 1" type="button" class="bouton-lien danger" @click="formulaire.agents.splice(i, 1)">✕</button>
           </div>
-          <button v-if="!lectureSeule" type="button" class="bouton-lien" @click="formulaire.agents.push({ nom: '', fonction: '' })">+ Ajouter un agent</button>
+          <button v-if="!lectureSeule" type="button" class="bouton-lien" @click="formulaire.agents.push(nouvelAgent())">+ Ajouter un agent</button>
         </div>
 
         <!-- Médicaments contrôlés -->
@@ -277,6 +290,7 @@ import {
   listerSupervisions,
   modifierSupervision,
   preparationSupervision,
+  agentsPossibles,
   renvoyerSupervision,
   soumettreSupervision,
   supprimerSupervision,
@@ -297,6 +311,7 @@ const formulaire = ref(null)
 const decision = ref(null)
 const docPieces = ref(null)
 const preparation = ref({ medicaments: [], lots: [] }) // théorique à la date + lots livrés
+const personnel = ref([]) // agents possibles : personnel du district + du centre choisi
 const regleValorisation = ref('prix de vente')
 
 const centres = computed(() => store.state.referentiel.centres)
@@ -333,6 +348,47 @@ function nouvelleLigne(medicamentId = null) {
   return { medicamentId, lotId: null, stockPhysique: null, commentaire: '' }
 }
 
+// ---------------------------------------------------------------------------
+// AGENTS PRÉSENTS : liste déroulante du personnel (+ « Autre » en saisie libre)
+// On enregistre toujours le NOM et la FONCTION en texte (et le compte
+// utilisateur s'il existe) : un départ du personnel ne change pas l'historique.
+// ---------------------------------------------------------------------------
+const AUTRE = 'AUTRE'
+const optionsAgents = computed(() => [
+  ...personnel.value.map((p) => ({ id: p.id, libelle: `${p.nom}${p.fonction ? ' — ' + p.fonction : ''} (${p.lieu})` })),
+  { id: AUTRE, libelle: 'Autre personne (saisie libre)' },
+])
+function nouvelAgent() {
+  return { choix: null, nom: '', fonction: '', utilisateurId: null }
+}
+/** Agent choisi dans la liste : on recopie son nom, sa fonction et son compte. */
+function choisirAgent(agent) {
+  const p = personnel.value.find((x) => x.id === agent.choix)
+  if (p) Object.assign(agent, { nom: p.nom, fonction: p.fonction, utilisateurId: p.utilisateurId })
+  else Object.assign(agent, { nom: '', fonction: '', utilisateurId: null }) // « Autre » ou liste vidée
+}
+/** Retrouve dans la liste un agent déjà enregistré (par compte, sinon par nom) ; sinon « Autre ». */
+function rattacherAgent(agent) {
+  const nom = (agent.nom || '').toLowerCase()
+  const p = personnel.value.find((x) => (agent.utilisateurId && x.utilisateurId === agent.utilisateurId) || x.nom.toLowerCase() === nom)
+  agent.choix = p ? p.id : agent.nom ? AUTRE : null
+}
+/** Charge le personnel (district + centre) puis rattache les agents déjà saisis. */
+async function chargerAgents() {
+  try {
+    personnel.value = await agentsPossibles(formulaire.value?.centreId)
+  } catch (erreur) {
+    personnel.value = []
+    store.dispatch('notifications/erreurApi', erreur)
+  }
+  formulaire.value?.agents.forEach(rattacherAgent)
+}
+/** Changement de centre : préparation (stock théorique) et personnel du centre. */
+function changerCentre() {
+  chargerPreparation()
+  chargerAgents()
+}
+
 async function ouvrir(s = null) {
   preparation.value = { medicaments: [], lots: [] }
   if (!s) {
@@ -340,9 +396,15 @@ async function ouvrir(s = null) {
       centreId: null,
       dateSupervision: dateDuJour(),
       observations: '',
-      agents: [{ nom: nomUtilisateurConnecte(), fonction: 'Superviseur du district' }],
+      // Par défaut : l'utilisateur connecté (retrouvé dans le personnel s'il y figure)
+      agents: [{ ...nouvelAgent(), nom: nomUtilisateurConnecte(), fonction: 'Superviseur du district', utilisateurId: store.state.auth.user?.id ?? null }],
       lignes: [],
     }
+    await chargerAgents()
+    // Retrouvé dans le personnel : on reprend sa vraie fonction
+    formulaire.value.agents.forEach((a) => {
+      if (a.choix !== AUTRE && a.choix !== null) choisirAgent(a)
+    })
     return
   }
   try {
@@ -351,10 +413,10 @@ async function ouvrir(s = null) {
       ...d,
       dateSupervision: d.dateSupervision.substring(0, 10),
       observations: d.observations || '',
-      agents: d.agents.map((a) => ({ nom: a.nom, fonction: a.fonction || '', utilisateurId: a.utilisateurId })),
+      agents: d.agents.map((a) => ({ choix: null, nom: a.nom, fonction: a.fonction || '', utilisateurId: a.utilisateurId })),
       lignes: d.lignes.map((l) => ({ ...l, commentaire: l.commentaire || '' })),
     }
-    if (d.statut === 'BROUILLON') await chargerPreparation()
+    if (d.statut === 'BROUILLON') await Promise.all([chargerPreparation(), chargerAgents()])
   } catch (erreur) {
     store.dispatch('notifications/erreurApi', erreur)
   }
@@ -613,7 +675,9 @@ onMounted(async () => {
 .lien { margin-left: 0.5rem; font-weight: 600; }
 .entete-section { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .section { flex: 1; margin: 0.25rem 0 0.5rem; padding-bottom: 0.35rem; border-bottom: 1px solid var(--border); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--primary); }
-.ligne-agent { display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.5rem; margin-bottom: 0.4rem; }
+.ligne-agent { display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.5rem; margin-bottom: 0.4rem; align-items: center; }
+.ligne-agent.libre { grid-template-columns: 1fr 1fr 1fr auto; }
+.aide-agents { margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--muted); }
 .lignes td { padding: 0.45rem 0.5rem; }
 .lignes .col-medicament { min-width: 260px; }
 .lignes .col-lot { min-width: 150px; }

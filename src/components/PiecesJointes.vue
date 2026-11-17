@@ -2,7 +2,7 @@
   =============================================================================
   PIÈCES JUSTIFICATIVES D'UN DOCUMENT (fenêtre)
   =============================================================================
-  Liste des fichiers joints à une commande ou une réception (facture
+  Liste des fichiers joints à une réception, un mouvement ou un bon de livraison (facture
   fournisseur, bon de livraison, bon de réception signé...), avec :
     - « Ouvrir » (dans un nouvel onglet) ;
     - « Ajouter » : choix du type de pièce + fichier PDF / JPEG / PNG (10 Mo max) ;
@@ -69,7 +69,7 @@ import { ajouterPiece, listerPieces, ouvrirPiece, supprimerPiece } from '@/api/p
 const props = defineProps({
   /** Module : 'achats', 'stock', 'livraisons', 'consommations' ou 'supervisions' (routes et droits du module) */
   module: { type: String, default: 'achats' },
-  /** Type de document : 'CommandeFournisseur', 'Reception', 'MouvementStock', 'CommandeCentre' ou 'Livraison' */
+  /** Type de document : 'Reception', 'MouvementStock' ou 'Livraison' */
   type: { type: String, required: true },
   id: { type: Number, required: true },
   titre: { type: String, default: 'Pièces justificatives' },
@@ -84,13 +84,13 @@ const TYPES_PIECES = {
   livraisons: ['Bon de livraison signé', 'Demande du centre', 'Bordereau de transport', 'Autre'],
   supervisions: ['Fiche de comptage signée', 'Procès-verbal de supervision', 'Photo / constat', 'Justificatif du centre', 'Autre'],
   consommations: ['Rapport papier du centre', 'Fiche de vérification signée', 'Registre / fiche de stock du centre', 'Autre'],
-  achats: ['Facture fournisseur', 'Bon de livraison', 'Bon de réception signé', 'Bon de commande signé', 'Autre'],
+  achats: ['Facture fournisseur', 'Bon de livraison', 'Bon de réception signé', 'Autre'],
 }[props.module] || ['Autre']
 
 const pieces = ref([])
 const chargement = ref(false)
 const envoi = ref(false)
-const libelle = ref(TYPES_PIECES[props.type === 'CommandeFournisseur' ? 3 : props.type === 'CommandeCentre' ? 1 : 0])
+const libelle = ref(TYPES_PIECES[0])
 
 async function charger() {
   chargement.value = true

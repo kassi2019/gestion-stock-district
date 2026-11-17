@@ -65,13 +65,12 @@
       <div v-else-if="vue === 'livraisons'" class="tableau-conteneur">
         <table class="tableau">
           <thead>
-            <tr><th>N° livraison</th><th>Date</th><th>Commande</th><th class="nombre">Lignes</th><th class="nombre">Montant</th><th>Statut</th><th class="actions">Actions</th></tr>
+            <tr><th>N° livraison</th><th>Date</th><th class="nombre">Lignes</th><th class="nombre">Montant</th><th>Statut</th><th class="actions">Actions</th></tr>
           </thead>
           <tbody>
             <tr v-for="l in pageLivraisons.lignesPage.value" :key="l.id">
               <td class="code">{{ l.numero }}</td>
               <td>{{ formaterDate(l.dateLivraison) }}</td>
-              <td>{{ l.commande?.numero || 'Directe' }}</td>
               <td class="nombre">{{ l._count?.lignes ?? 0 }}</td>
               <td class="nombre">{{ formaterMontant(l.montantTotal) }}</td>
               <td><span class="badge" :class="STATUTS_LIVRAISON[l.statut]?.badge">{{ STATUTS_LIVRAISON[l.statut]?.libelle }}</span></td>
@@ -127,6 +126,9 @@ const TYPES_MOUVEMENT_CENTRE = {
   CONSOMMATION: 'Consommation',
   ECART_SUPERVISION: 'Écart de supervision',
   REGULARISATION: 'Régularisation',
+  INVENTAIRE_INITIAL: 'Inventaire initial',
+  PERTE: 'Pertes / périmés',
+  TRANSFERT: 'Transfert entre centres',
 }
 
 const store = useStore()

@@ -13,6 +13,13 @@
 -->
 <template>
   <div>
+    <!-- Avertissement : à ne pas confondre avec « + Facture générée » (nouveau circuit) -->
+    <p class="avertissement">
+      <strong>Ancien circuit uniquement.</strong> Rapports de consommation validés AVANT la refonte : la facture porte sur ce que
+      le centre a CONSOMMÉ et <strong>ne sort pas de stock</strong> (déjà sorti par les anciennes livraisons).
+      Pour les nouveaux rapports centre, utilisez le bouton « + Facture générée » de l'onglet Factures.
+      Cet onglet disparaît quand tous les anciens rapports sont facturés.
+    </p>
     <div class="barre-outils">
       <div class="filtre">
         <ListeDeroulante v-model="centreId" :options="centres" champ-libelle="nom" placeholder="Tous les centres" />
@@ -23,7 +30,7 @@
         <input v-model="dateEmission" type="date" :max="dateDuJour()" />
       </label>
       <button v-si-modif :disabled="selection.size === 0 || enregistrement" @click="generer">
-        Générer {{ selection.size || '' }} facture(s){{ selection.size ? ` — ${formaterMontant(montantSelection)}` : '' }}
+        Facturer {{ selection.size || '' }} ancien(s) rapport(s){{ selection.size ? ` — ${formaterMontant(montantSelection)}` : '' }}
       </button>
     </div>
 
@@ -140,6 +147,10 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.avertissement {
+  margin: 0 0 1rem; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.85rem;
+  background: #fff8e1; border-left: 4px solid #f0ad4e; color: #5d4500;
+}
 .date-emission { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--muted); }
 .date-emission input { width: 150px; }
 .col-case { width: 36px; text-align: center; }

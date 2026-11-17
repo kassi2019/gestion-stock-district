@@ -1,33 +1,21 @@
 <!--
   =============================================================================
-  MODULE 05 — CENTRES DE SANTÉ : COMMANDES ET LIVRAISONS (page avec onglets)
+  MODULE 05 — STOCK DES CENTRES ET HISTORIQUE DES LIVRAISONS (page avec onglets)
   =============================================================================
-  Circuit de distribution (cahier des charges §3.4) :
-    1. COMMANDE du centre, vérification des disponibilités, quantités
-       ACCORDÉES                                           -> OngletCommandesCentre.vue
-    2. PRÉPARATION (lots choisis automatiquement, prix figés) puis VALIDATION
-       de la livraison = sortie du dépôt + entrée au centre -> OngletLivraisons.vue
-    3. SUIVI par centre : stock théorique, livraisons, mouvements
-                                                            -> OngletCentres.vue
-  Droits : module « livraisons » (Voir / Imprimer / Modifier).
+  Spec nov. 2026 : plus de commandes des centres ; les sorties vers les centres
+  se font par FACTURE (générée par le rapport centre, ou manuelle).
+    1. SUIVI par centre : stock théorique, livraisons, mouvements -> OngletCentres.vue
+    2. ANCIENS BONS DE LIVRAISON (lecture seule)                  -> OngletLivraisons.vue
+  Droits : module « livraisons » (Voir / Imprimer).
   =============================================================================
 -->
 <template>
   <div class="page-livraisons">
     <EnteteModule
       icone="camion"
-      titre="Commandes et livraisons aux centres"
-      description="Commandes des centres de santé, préparation et bons de livraison, stock théorique de chaque centre."
+      titre="Stock des centres et historique des livraisons"
+      description="Stock théorique de chaque centre et anciens bons de livraison (les livraisons se font maintenant par facture)."
     />
-
-    <!-- Circuit en 3 étapes (rappel visuel) -->
-    <div class="circuit">
-      <div class="etape"><span>1</span> Commande du centre (quantités accordées)</div>
-      <Icone nom="fleche" :taille="18" />
-      <div class="etape"><span>2</span> Préparation (lots, prix)</div>
-      <Icone nom="fleche" :taille="18" />
-      <div class="etape forte"><span>3</span> Validation = sortie du dépôt, entrée au centre</div>
-    </div>
 
     <nav class="onglets">
       <button
@@ -43,9 +31,8 @@
     </nav>
 
     <section class="bloc">
-      <OngletCommandesCentre v-if="ongletActif === 'commandes'" @preparer="preparer" />
-      <OngletLivraisons v-else-if="ongletActif === 'livraisons'" :commande-a-preparer="commandeAPreparer" />
-      <OngletCentres v-else-if="ongletActif === 'centres'" />
+      <OngletCentres v-if="ongletActif === 'centres'" />
+      <OngletLivraisons v-else-if="ongletActif === 'livraisons'" />
     </section>
   </div>
 </template>
@@ -55,14 +42,12 @@ import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import EnteteModule from '@/components/EnteteModule.vue'
 import Icone from '@/components/Icone.vue'
-import OngletCommandesCentre from './OngletCommandesCentre.vue'
 import OngletLivraisons from './OngletLivraisons.vue'
 import OngletCentres from './OngletCentres.vue'
 
 const ONGLETS = [
-  { code: 'commandes', titre: 'Commandes des centres', icone: 'facture' },
-  { code: 'livraisons', titre: 'Bons de livraison', icone: 'camion' },
   { code: 'centres', titre: 'Suivi des centres', icone: 'graphique' },
+  { code: 'livraisons', titre: 'Anciens bons de livraison', icone: 'camion' },
 ]
 
 const route = useRoute()
@@ -72,15 +57,6 @@ const router = useRouter()
 const ongletActif = ref(ONGLETS.some((o) => o.code === route.query.onglet) ? route.query.onglet : ONGLETS[0].code)
 watch(ongletActif, (code) => router.replace({ query: { onglet: code } }))
 
-// Commande à livrer (bouton « Préparer la livraison » de l'onglet Commandes)
-const commandeAPreparer = ref(null)
-function preparer(commande) {
-  commandeAPreparer.value = { ...commande } // nouvel objet : relance même pour la même commande
-  ongletActif.value = 'livraisons'
-}
-watch(ongletActif, (code) => {
-  if (code !== 'livraisons') commandeAPreparer.value = null
-})
 </script>
 
 <style scoped>

@@ -1,23 +1,20 @@
 <!--
   =============================================================================
-  ONGLET « RÉCEPTIONS »
+  ONGLET « RÉCEPTIONS FOURNISSEURS » (spec nov. 2026, §3)
   =============================================================================
-  Enregistrement des médicaments réellement livrés par les fournisseurs.
-  - À partir d'une COMMANDE (bouton « Réceptionner » ou choix de la commande) :
-    les lignes sont pré-remplies avec les quantités RESTANT à recevoir
-    (réception totale ou partielle) ;
-  - ou réception DIRECTE (sans commande) : fournisseur + médicaments.
-  - Pour chaque ligne : quantité reçue, prix unitaire, n° de lot et date de
-    péremption (obligatoires pour un médicament « suivi par lot »). Un même
+  Enregistrement de chaque livraison reçue d'un fournisseur du district.
+  Il n'y a plus de commande (le district commande dans l'application nationale).
+  - Saisie : fournisseur, date, n° de facture / bon de livraison du fournisseur,
+    et pour chaque produit : quantité reçue, n° de lot et date de péremption
+    (obligatoires seulement pour un médicament « suivi par lot »). Un même
     médicament reçu en plusieurs lots : bouton « + lot ».
+  - PRIX D'ACHAT : repris des paramètres (Paramétrage > Prix), affiché mais
+    NON MODIFIABLE ; il est figé par le serveur à la validation.
   - Brouillon (modifiable) -> VALIDÉE : c'est la VALIDATION qui fait entrer
-    les médicaments dans le STOCK du dépôt (irréversible).
-  - Bon de réception (PDF) et pièces justificatives (facture, bon de livraison).
-  ENCHAÎNEMENT (assistant, réception d'une commande) : barre d'étapes en haut ;
-  après validation, encart « Imprimer le bon » + « Réceptionner la suite » s'il
-  reste à recevoir. Un brouillon déjà ouvert pour la commande est ROUVERT.
+    les médicaments dans le STOCK du district (irréversible ; une erreur se
+    corrige par un ajustement dans le module Stock).
+  - Bon de réception (PDF) et pièces justificatives.
 
-  Propriété : commandeAReceptionner (commande choisie dans l'onglet Commandes)
   Événement : @modifie -> la page met à jour les compteurs
   =============================================================================
 -->
@@ -56,7 +53,7 @@
             <ColonneTri v-model="tri" cle="numero">N° réception</ColonneTri>
             <ColonneTri v-model="tri" cle="date">Date</ColonneTri>
             <ColonneTri v-model="tri" cle="fournisseur">Fournisseur</ColonneTri>
-            <ColonneTri v-model="tri" cle="commande">Commande</ColonneTri>
+            <ColonneTri v-model="tri" cle="bonLivraison">Bon de livraison</ColonneTri>
             <ColonneTri v-model="tri" cle="facture">Facture fourn.</ColonneTri>
             <ColonneTri v-model="tri" cle="montant" class="nombre">Montant</ColonneTri>
             <ColonneTri v-model="tri" cle="statut">Statut</ColonneTri>
@@ -68,7 +65,7 @@
             <td class="code">{{ r.numero }}</td>
             <td>{{ formaterDate(r.dateReception) }}</td>
             <td><strong>{{ r.fournisseur.raisonSociale }}</strong></td>
-            <td><span v-if="r.commande" class="code">{{ r.commande.numero }}</span><span v-else class="detail">Directe</span></td>
+            <td>{{ r.numBonLivraison || '—' }}</td>
             <td>{{ r.numFactureFourn || '—' }}</td>
             <td class="nombre">{{ formaterMontant(r.montantTotal) }}</td>
             <td><span class="badge" :class="STATUTS_RECEPTION[r.statut]?.badge">{{ STATUTS_RECEPTION[r.statut]?.libelle }}</span></td>
@@ -92,23 +89,12 @@
       tres-large
       @fermer="formulaire = null"
     >
-      <!-- Où en est la réception dans le circuit (seulement pour une réception de commande) -->
-      <EtapesCircuit v-if="formulaire.commandeId && formulaire.statut !== 'ANNULEE'" :etapes="ETAPES_ACHAT" :courante="etape.numero" :aide="etape.aide" />
-
-      <!-- Dernière étape : réception validée -> bon de réception, et suite éventuelle -->
-      <div v-if="formulaire.commandeId && formulaire.statut === 'VALIDEE'" class="encart-suite">
-        <div>
-          <strong>Réception validée : les médicaments sont en stock.</strong>
-          <span v-if="formulaire.resteCommande > 0">
-            Il reste <strong>{{ formaterNombre(formulaire.resteCommande) }}</strong> unité(s) à recevoir sur la commande {{ formulaire.commande?.numero }}.
-          </span>
-          <span v-else>La commande {{ formulaire.commande?.numero }} est entièrement reçue.</span>
-        </div>
+      <!-- Réception validée : rappel et bon de réception -->
+      <div v-if="formulaire.statut === 'VALIDEE'" class="encart-suite">
+        <div><strong>Réception validée : les médicaments sont en stock au district.</strong>
+          Une erreur se corrige par un ajustement (module Stock).</div>
         <div class="encart-suite-boutons">
           <button v-si-imprimer type="button" @click="imprimer(formulaire)">Imprimer le bon de réception</button>
-          <button v-if="formulaire.resteCommande > 0" v-si-modif type="button" class="bouton-secondaire" @click="nouvelleDepuisCommande({ id: formulaire.commandeId })">
-            Réceptionner la suite
-          </button>
         </div>
       </div>
 
@@ -122,32 +108,19 @@
 
       <form id="form-reception" class="grille-formulaire trois-colonnes" @submit.prevent="enregistrer(false)">
         <div>
-          <label>Commande d'origine</label>
-          <!-- Consultation : simple texte (la commande peut être entièrement reçue) -->
-          <input v-if="lectureSeule" :value="formulaire.commande?.numero || 'Réception directe'" disabled />
-          <ListeDeroulante
-            v-else
-            v-model="formulaire.commandeId"
-            :options="commandesEnAttente"
-            :champ-libelle="(c) => `${c.numero} — ${c.fournisseur.raisonSociale}`"
-            placeholder="Réception directe (sans commande)"
-            :desactive="lectureSeule"
-            @update:model-value="choisirCommande"
-          />
-        </div>
-        <div>
           <label class="obligatoire">Fournisseur</label>
           <ListeDeroulante
             v-model="formulaire.fournisseurId"
             :options="fournisseursActifs"
             champ-libelle="raisonSociale"
             placeholder="— Choisir le fournisseur —"
-            :desactive="lectureSeule || !!formulaire.commandeId"
+            :desactive="lectureSeule"
+            @update:model-value="actualiserPrix"
           />
         </div>
         <div>
           <label class="obligatoire">Date de réception</label>
-          <input v-model="formulaire.dateReception" type="date" required :disabled="lectureSeule" />
+          <input v-model="formulaire.dateReception" type="date" required :disabled="lectureSeule" @change="actualiserPrix" />
         </div>
         <div>
           <label>N° facture fournisseur</label>
@@ -157,18 +130,19 @@
           <label>N° bon de livraison</label>
           <input v-model.trim="formulaire.numBonLivraison" maxlength="50" :disabled="lectureSeule" />
         </div>
-        <div></div>
 
         <!-- ---------- Lignes ---------- -->
         <div class="pleine-largeur">
           <h4 class="section">Médicaments reçus</h4>
+          <p v-if="!lectureSeule" class="aide-prix">
+            Le prix d'achat est repris de Paramétrage &gt; Prix et n'est pas modifiable ici.
+          </p>
           <table class="tableau lignes">
             <thead>
               <tr>
                 <th>Médicament</th>
-                <th v-if="formulaire.commandeId" class="nombre">Reste</th>
                 <th class="nombre">Qté reçue</th>
-                <th class="nombre">Prix unitaire</th>
+                <th class="nombre">Prix d'achat</th>
                 <th>N° de lot</th>
                 <th>Péremption</th>
                 <th class="nombre">Montant</th>
@@ -179,7 +153,7 @@
               <tr v-for="(ligne, index) in formulaire.lignes" :key="index">
                 <td class="col-medicament">
                   <ListeDeroulante
-                    v-if="!lectureSeule && !formulaire.commandeId"
+                    v-if="!lectureSeule"
                     v-model="ligne.medicamentId"
                     :options="medicamentsActifs"
                     :champ-libelle="(m) => `${m.code} — ${m.designation}`"
@@ -192,9 +166,12 @@
                     <span v-if="suiviLot(ligne.medicamentId)" class="lot-requis"> · lot et péremption obligatoires</span>
                   </small>
                 </td>
-                <td v-if="formulaire.commandeId" class="nombre detail">{{ ligne.reste ?? '—' }}</td>
                 <td class="nombre"><input v-model.number="ligne.quantite" type="number" min="1" step="1" required :disabled="lectureSeule" /></td>
-                <td class="nombre"><input v-model.number="ligne.prixUnitaire" type="number" min="0" step="1" required :disabled="lectureSeule" /></td>
+                <td class="nombre">
+                  <span v-if="ligne.prixUnitaire !== null && ligne.prixUnitaire !== undefined">{{ formaterMontant(ligne.prixUnitaire) }}</span>
+                  <span v-else-if="ligne.medicamentId" class="prix-manquant" title="Définissez le prix d'achat dans Paramétrage > Prix">Prix non défini</span>
+                  <span v-else class="detail">—</span>
+                </td>
                 <td><input v-model.trim="ligne.numeroLot" maxlength="50" class="champ-lot" :required="suiviLot(ligne.medicamentId)" :disabled="lectureSeule" /></td>
                 <td><input v-model="ligne.datePeremption" type="date" :required="suiviLot(ligne.medicamentId)" :disabled="lectureSeule" /></td>
                 <td class="nombre"><strong>{{ formaterMontant((ligne.quantite || 0) * (ligne.prixUnitaire || 0)) }}</strong></td>
@@ -206,8 +183,8 @@
             </tbody>
             <tfoot>
               <tr>
-                <td :colspan="formulaire.commandeId ? 6 : 5">
-                  <button v-if="!lectureSeule && !formulaire.commandeId" type="button" class="bouton-lien" @click="ajouterLigne">
+                <td colspan="5">
+                  <button v-if="!lectureSeule" type="button" class="bouton-lien" @click="ajouterLigne">
                     + Ajouter un médicament
                   </button>
                 </td>
@@ -265,28 +242,21 @@ import PiecesJointes from '@/components/PiecesJointes.vue'
 import { utiliserTableau } from '@/utils/pagination'
 import { confirmer } from '@/utils/alertes'
 import { dateDuJour, formaterDate, formaterMontant, formaterNombre } from '@/utils/format'
-import EtapesCircuit from '@/components/EtapesCircuit.vue'
 import {
   annulerReception,
   creerReception,
-  listerCommandes,
   listerReceptions,
   modifierReception,
-  trouverCommande,
+  prixAchatReception,
   trouverReception,
   validerReception,
 } from '@/api/achats'
-import { bonDeReceptionPdf, ETAPE_ACHAT, ETAPES_ACHAT, optionsStatuts, STATUTS_RECEPTION } from './achatsCommun'
+import { bonDeReceptionPdf, optionsStatuts, STATUTS_RECEPTION } from './achatsCommun'
 
-const props = defineProps({
-  /** Commande à réceptionner (bouton « Réceptionner » de l'onglet Commandes) */
-  commandeAReceptionner: { type: Object, default: null },
-})
 const emit = defineEmits(['modifie'])
 const store = useStore()
 
 const receptions = ref([])
-const commandesEnAttente = ref([])
 const chargement = ref(false)
 const enregistrement = ref(false)
 const recherche = ref('')
@@ -303,33 +273,18 @@ const medicamentsActifs = computed(() => medicaments.value.filter((m) => m.actif
 /** Réception non modifiable (validée ou annulée). */
 const lectureSeule = computed(() => !!formulaire.value?.id && formulaire.value.statut !== 'BROUILLON')
 
-/** Étape du circuit où se trouve la réception ouverte (barre d'étapes en haut de la fenêtre). */
-const etape = computed(() => {
-  const f = formulaire.value
-  if (!f?.id) return { numero: ETAPE_ACHAT.RECEPTION, aide: 'Saisissez les quantités reçues, n° de lot et péremption, puis « Valider (entrée en stock) ».' }
-  if (f.statut === 'BROUILLON') return { numero: ETAPE_ACHAT.VALIDATION, aide: 'Vérifiez les lignes puis « Valider (entrée en stock) ».' }
-  return {
-    numero: ETAPE_ACHAT.BON,
-    aide: f.resteCommande > 0 ? 'Imprimez le bon de réception ; la suite de la commande pourra être réceptionnée à son arrivée.' : 'Imprimez le bon de réception : la commande est terminée.',
-  }
-})
-
 const receptionsAffichees = computed(() => {
   const texte = recherche.value.toLowerCase()
   if (!texte) return receptions.value
   return receptions.value.filter((r) =>
-    [r.numero, r.fournisseur.raisonSociale, r.numFactureFourn, r.commande?.numero].some((v) => (v || '').toLowerCase().includes(texte)),
+    [r.numero, r.fournisseur.raisonSociale, r.numFactureFourn, r.numBonLivraison].some((v) => (v || '').toLowerCase().includes(texte)),
   )
 })
 
 async function charger() {
   chargement.value = true
   try {
-    ;[receptions.value, commandesEnAttente.value] = await Promise.all([
-      listerReceptions(filtres),
-      // Commandes qu'on peut réceptionner : validées ou partiellement reçues
-      Promise.all([listerCommandes({ statut: 'VALIDEE' }), listerCommandes({ statut: 'PARTIELLEMENT_RECUE' })]).then(([a, b]) => [...a, ...b]),
-    ])
+    receptions.value = await listerReceptions(filtres)
   } catch (erreur) {
     store.dispatch('notifications/erreurApi', erreur)
   } finally {
@@ -344,7 +299,6 @@ watch(filtres, charger)
 
 function videFormulaire() {
   return {
-    commandeId: null,
     fournisseurId: null,
     dateReception: dateDuJour(),
     numFactureFourn: '',
@@ -353,7 +307,8 @@ function videFormulaire() {
     lignes: [nouvelleLigne()],
   }
 }
-function nouvelleLigne(medicamentId = null, quantite = 1, prixUnitaire = 0) {
+/** Ligne vide. prixUnitaire = null tant que le prix n'est pas connu (repris des paramètres). */
+function nouvelleLigne(medicamentId = null, quantite = 1, prixUnitaire = null) {
   return { medicamentId, quantite, prixUnitaire, numeroLot: '', datePeremption: '' }
 }
 
@@ -379,63 +334,28 @@ async function ouvrirFormulaire(reception = null) {
         datePeremption: l.datePeremption ? l.datePeremption.substring(0, 10) : '',
       })),
     }
-    // Brouillon lié à une commande : on affiche les restes à recevoir
-    if (r.statut === 'BROUILLON' && r.commandeId) await completerRestes(r.commandeId)
-    // Validée et liée à une commande : total restant à recevoir (pour proposer la suite)
-    if (r.statut === 'VALIDEE' && r.commandeId) {
-      const c = await trouverCommande(r.commandeId)
-      formulaire.value.resteCommande = c.lignes.reduce((t, l) => t + Math.max(0, l.quantite - l.quantiteRecue), 0)
-    }
+    // Brouillon : prix actualisés (ils ont pu changer dans les paramètres)
+    if (r.statut === 'BROUILLON') await actualiserPrix()
   } catch (erreur) {
     store.dispatch('notifications/erreurApi', erreur)
   }
 }
 
 /**
- * Nouvelle réception à partir d'une commande : lignes = restes à recevoir.
- * Si une réception de cette commande est DÉJÀ en brouillon, on la rouvre
- * au lieu d'en créer une seconde.
+ * Prix d'achat de chaque ligne, repris des paramètres pour le fournisseur et
+ * la date de réception. Appelé quand le fournisseur, la date ou un médicament change.
  */
-async function nouvelleDepuisCommande(commande) {
+async function actualiserPrix() {
+  const f = formulaire.value
+  if (!f || lectureSeule.value) return
+  const ids = [...new Set(f.lignes.map((l) => l.medicamentId).filter(Boolean))]
   try {
-    const c = await trouverCommande(commande.id)
-    const enCours = (c.receptions || []).find((r) => r.statut === 'BROUILLON')
-    if (enCours) {
-      store.dispatch('notifications/info', `Une réception est déjà en brouillon pour la commande ${c.numero} (${enCours.numero}) : elle est rouverte.`)
-      return ouvrirFormulaire(enCours)
+    const prix = await prixAchatReception({ medicamentIds: ids, fournisseurId: f.fournisseurId, date: f.dateReception })
+    for (const ligne of f.lignes) {
+      ligne.prixUnitaire = ligne.medicamentId ? prix[ligne.medicamentId] ?? null : null
     }
   } catch (erreur) {
-    return store.dispatch('notifications/erreurApi', erreur)
-  }
-  formulaire.value = videFormulaire()
-  formulaire.value.commandeId = commande.id
-  await choisirCommande(commande.id)
-}
-
-/** Commande choisie : fournisseur + lignes pré-remplies avec les restes. */
-async function choisirCommande(commandeId) {
-  const f = formulaire.value
-  if (!commandeId) {
-    f.lignes = [nouvelleLigne()]
-    return
-  }
-  try {
-    const c = await trouverCommande(commandeId)
-    f.fournisseurId = c.fournisseurId
-    f.lignes = c.lignes
-      .filter((l) => l.quantite - l.quantiteRecue > 0)
-      .map((l) => ({ ...nouvelleLigne(l.medicamentId, l.quantite - l.quantiteRecue, Number(l.prixUnitaire)), reste: l.quantite - l.quantiteRecue }))
-  } catch (erreur) {
     store.dispatch('notifications/erreurApi', erreur)
-  }
-}
-
-/** Affiche le reste à recevoir de chaque ligne d'un brouillon lié à une commande. */
-async function completerRestes(commandeId) {
-  const c = await trouverCommande(commandeId)
-  for (const ligne of formulaire.value.lignes) {
-    const lc = c.lignes.find((l) => l.medicamentId === ligne.medicamentId)
-    ligne.reste = lc ? lc.quantite - lc.quantiteRecue : null
   }
 }
 
@@ -446,13 +366,13 @@ function ajouterLigne() {
 /** Même médicament reçu dans un autre lot : nouvelle ligne juste en dessous. */
 function ajouterLot(index) {
   const l = formulaire.value.lignes[index]
-  formulaire.value.lignes.splice(index + 1, 0, { ...nouvelleLigne(l.medicamentId, 1, l.prixUnitaire), reste: l.reste })
+  formulaire.value.lignes.splice(index + 1, 0, nouvelleLigne(l.medicamentId, 1, l.prixUnitaire))
 }
 
-/** Médicament choisi (réception directe) : prix prérempli avec son prix d'achat actuel. */
+/** Médicament choisi : son prix d'achat est repris des paramètres. */
 function choisirMedicament(ligne, medicamentId) {
-  const med = medicaments.value.find((m) => m.id === medicamentId)
-  if (med && med.prixAchatActuel !== null && !ligne.prixUnitaire) ligne.prixUnitaire = Number(med.prixAchatActuel)
+  ligne.prixUnitaire = null
+  if (medicamentId) actualiserPrix()
 }
 
 function medicament(id) {
@@ -479,10 +399,14 @@ const totalFormulaire = computed(() =>
  */
 async function enregistrer(valider) {
   const f = formulaire.value
-  if (!f.commandeId && !f.fournisseurId) return store.dispatch('notifications/erreur', 'Choisissez le fournisseur (ou la commande).')
+  if (!f.fournisseurId) return store.dispatch('notifications/erreur', 'Choisissez le fournisseur.')
   const lignes = f.lignes.filter((l) => l.medicamentId)
   if (lignes.length === 0) return store.dispatch('notifications/erreur', 'Ajoutez au moins un médicament reçu.')
   if (lignes.some((l) => !(l.quantite >= 1))) return store.dispatch('notifications/erreur', 'Chaque quantité reçue doit être au moins 1.')
+  const sansPrix = lignes.find((l) => l.prixUnitaire === null || l.prixUnitaire === undefined)
+  if (sansPrix) {
+    return store.dispatch('notifications/erreur', `${libelleMedicament(sansPrix.medicamentId)} : pas de prix d'achat. Définissez-le dans Paramétrage > Prix.`)
+  }
 
   if (valider) {
     const sansLot = lignes.find((l) => suiviLot(l.medicamentId) && (!l.numeroLot || !l.datePeremption))
@@ -491,7 +415,7 @@ async function enregistrer(valider) {
     }
     const confirme = await confirmer({
       titre: 'Valider la réception ?',
-      texte: `Les ${lignes.length} ligne(s) reçue(s) vont ENTRER EN STOCK au dépôt. Une réception validée ne peut plus être modifiée (correction par régularisation).`,
+      texte: `Les ${lignes.length} ligne(s) reçue(s) vont ENTRER EN STOCK au dépôt. Une réception validée ne peut plus être modifiée (correction par ajustement).`,
       boutonConfirmer: 'Oui, valider et mettre en stock',
     })
     if (!confirme) return
@@ -500,8 +424,7 @@ async function enregistrer(valider) {
   enregistrement.value = true
   try {
     const donnees = {
-      commandeId: f.commandeId || undefined,
-      fournisseurId: f.fournisseurId || undefined,
+      fournisseurId: f.fournisseurId,
       dateReception: f.dateReception,
       numFactureFourn: f.numFactureFourn || undefined,
       numBonLivraison: f.numBonLivraison || undefined,
@@ -509,7 +432,6 @@ async function enregistrer(valider) {
       lignes: lignes.map((l) => ({
         medicamentId: l.medicamentId,
         quantite: Number(l.quantite),
-        prixUnitaire: Number(l.prixUnitaire) || 0,
         numeroLot: l.numeroLot || undefined,
         datePeremption: l.datePeremption || undefined,
       })),
@@ -568,7 +490,7 @@ const VALEURS_TRI = {
   numero: (r) => r.numero,
   date: (r) => r.dateReception,
   fournisseur: (r) => r.fournisseur.raisonSociale,
-  commande: (r) => r.commande?.numero,
+  bonLivraison: (r) => r.numBonLivraison,
   facture: (r) => r.numFactureFourn,
   montant: (r) => Number(r.montantTotal),
   statut: (r) => STATUTS_RECEPTION[r.statut]?.libelle,
@@ -588,20 +510,11 @@ const COLONNES_PDF = [
   { titre: 'N° réception', valeur: (r) => r.numero },
   { titre: 'Date', valeur: (r) => formaterDate(r.dateReception) },
   { titre: 'Fournisseur', valeur: (r) => r.fournisseur.raisonSociale },
-  { titre: 'Commande', valeur: (r) => r.commande?.numero || 'Directe' },
+  { titre: 'Bon de livraison', valeur: (r) => r.numBonLivraison },
   { titre: 'Facture', valeur: (r) => r.numFactureFourn },
   { titre: 'Montant', valeur: (r) => formaterMontant(r.montantTotal), droite: true, somme: (r) => r.montantTotal, formatTotal: formaterMontant },
   { titre: 'Statut', valeur: (r) => STATUTS_RECEPTION[r.statut]?.libelle },
 ]
-
-// Commande à réceptionner reçue de l'onglet Commandes
-watch(
-  () => props.commandeAReceptionner,
-  (commande) => {
-    if (commande) nouvelleDepuisCommande(commande)
-  },
-  { immediate: true },
-)
 
 onMounted(() => {
   store.dispatch('referentiel/charger', { liste: 'fournisseurs' }).catch(() => {})
@@ -636,6 +549,8 @@ onMounted(() => {
 .lignes input[type='date'] { width: 140px; }
 .champ-lot { width: 120px; }
 .lot-requis { color: #b35c00; font-weight: 600; }
+.prix-manquant { color: #c0392b; font-weight: 600; font-size: 0.8rem; }
+.aide-prix { margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--muted); }
 .lignes .total { font-size: 1.05rem; font-weight: 800; color: var(--primary-dark); }
 .lignes tfoot td { border-bottom: none; }
 textarea { width: 100%; resize: vertical; }

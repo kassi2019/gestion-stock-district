@@ -1,6 +1,6 @@
 <!--
   =============================================================================
-  ONGLET « SUIVI DES DÉCLARATIONS »
+  ONGLET « SUIVI DES RAPPORTS » (rapports centre — spec nov. 2026)
   =============================================================================
   Tableau d'une année : une ligne par centre actif, une colonne par mois.
   Chaque case montre le rapport du mois (statut, montant, vérifié ou non) ou
@@ -19,9 +19,7 @@
       <div class="legende">
         <span class="case-legende manquant"></span> Manquant
         <span class="case-legende brouillon"></span> Brouillon
-        <span class="case-legende soumis"></span> Soumis
-        <span class="case-legende valide"></span> Validé / facturé
-        <span>✔ vérifié sur place</span>
+        <span class="case-legende valide"></span> Validé
       </div>
     </div>
 
@@ -29,7 +27,6 @@
       <div class="carte"><span>{{ resume.attendus }}</span><small>rapports attendus (mois écoulés)</small></div>
       <div class="carte"><span>{{ resume.recus }}</span><small>rapports reçus</small></div>
       <div class="carte alerte"><span>{{ resume.manquants }}</span><small>rapports manquants</small></div>
-      <div class="carte"><span>{{ resume.verifies }}</span><small>vérifiés sur place</small></div>
       <div class="carte"><span>{{ formaterMontant(resume.montantValide) }}</span><small>consommation validée</small></div>
     </div>
 
@@ -77,7 +74,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useStore } from 'vuex'
-import { suiviAnnuel } from '@/api/consommations'
+import { suiviRapportsCentre } from '@/api/consommations'
 import { formaterMontant } from '@/utils/format'
 import { libellePeriode, MOIS, STATUTS_RAPPORT } from './consommationsCommun'
 
@@ -135,7 +132,7 @@ function saisir(centreId, mois) {
 async function charger() {
   chargement.value = true
   try {
-    suivi.value = await suiviAnnuel(annee.value)
+    suivi.value = await suiviRapportsCentre(annee.value)
   } catch (erreur) {
     store.dispatch('notifications/erreurApi', erreur)
   } finally {
@@ -151,7 +148,7 @@ defineExpose({ charger })
 .annee { font-size: 1.15rem; color: var(--primary-dark); min-width: 50px; text-align: center; }
 .legende { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--muted); flex-wrap: wrap; }
 .case-legende { display: inline-block; width: 14px; height: 14px; border-radius: 4px; margin-left: 0.5rem; }
-.resume { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; margin: 0.5rem 0 1rem; }
+.resume { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin: 0.5rem 0 1rem; }
 .carte { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.85rem 1rem; border-radius: 12px; background: var(--primary-light); }
 .carte span { font-size: 1.25rem; font-weight: 800; color: var(--primary-dark); }
 .carte small { color: var(--muted); font-size: 0.8rem; }

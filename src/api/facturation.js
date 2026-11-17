@@ -36,6 +36,35 @@ export async function genererFactures(rapportIds, dateEmission) {
   return (await http.post('/facturation/factures/generer', { rapportIds, dateEmission })).data
 }
 
+/**
+ * Pour l'écran de facture manuelle : { medicamentId: { stock, prixVente } }
+ * (stock disponible au district, lots non périmés ; prix de vente du centre à la date).
+ */
+export async function infosSortie({ medicamentIds, centreId, date }) {
+  if (!medicamentIds.length) return {}
+  const params = filtresPropres({ medicamentIds: medicamentIds.join(','), centreId, date })
+  return (await http.get('/facturation/sortie-infos', { params })).data
+}
+
+/** Facture MANUELLE = sortie immédiate du stock du district : { centreId, dateEmission, lignes: [{ medicamentId, quantite }] }. */
+export async function creerFactureManuelle(donnees) {
+  return (await http.post('/facturation/factures/manuelle', donnees)).data
+}
+
+/**
+ * Facture GÉNÉRÉE (à partir du rapport centre validé) — proposition :
+ * { rapport, dateEmission, lignes: [{ medicamentId, medicament, stockDisponibleCentre, cmm,
+ *   quantiteACommander, stockDistrict, quantiteProposee, prixVente }] }.
+ */
+export async function propositionFactureGeneree({ centreId, annee, mois }) {
+  return (await http.get('/rapports-centre/facture-generee', { params: { centreId, annee, mois } })).data
+}
+
+/** Création de la facture générée : lignes [{ medicamentId, quantite }] (validées ou réduites). */
+export async function creerFactureGeneree(rapportId, lignes) {
+  return (await http.post(`/rapports-centre/${rapportId}/facture-generee`, { lignes })).data
+}
+
 export async function annulerFacture(id, motif) {
   return (await http.post(`/facturation/factures/${id}/annuler`, { motif })).data
 }

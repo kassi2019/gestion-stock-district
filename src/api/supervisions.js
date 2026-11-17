@@ -21,6 +21,11 @@ export async function trouverSupervision(id) {
   return (await http.get(`/supervisions/${id}`)).data
 }
 
+/** Personnel proposé pour « Agents présents » : district + centre choisi. [{ id, nom, fonction, lieu, utilisateurId }] */
+export async function agentsPossibles(centreId) {
+  return (await http.get('/supervisions/agents', { params: filtresPropres({ centreId }) })).data
+}
+
 /** Aide à la saisie : { medicaments: [{ medicamentId, medicament, stockTheorique }], lots: [...] } à la date. */
 export async function preparationSupervision(centreId, date) {
   return (await http.get(`/supervisions/preparation/${centreId}`, { params: filtresPropres({ date }) })).data

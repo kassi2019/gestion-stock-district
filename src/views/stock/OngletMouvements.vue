@@ -94,7 +94,7 @@
           <label class="obligatoire">Type de mouvement</label>
           <div class="choix-types">
             <label v-for="t in TYPES_MANUELS" :key="t.id" class="choix-type" :class="{ choisi: formulaire.type === t.id, sortie: t.sens < 0 }">
-              <input v-model="formulaire.type" type="radio" :value="t.id" hidden @change="formulaire.lotChoisi = null" />
+              <input v-model="formulaire.type" type="radio" :value="t.id" hidden @change="changerType" />
               <strong>{{ t.sens > 0 ? '▲' : '▼' }} {{ t.libelle }}</strong>
               <small>{{ t.aide }}</small>
             </label>
@@ -230,7 +230,13 @@ watch(filtres, charger)
 // ---------------------------------------------------------------------------
 // NOUVEAU MOUVEMENT
 // ---------------------------------------------------------------------------
-const etatActifs = computed(() => props.etat.filter((m) => m.actif))
+/** Changement de type : lot à rechoisir ; produit retiré s'il n'est plus dans la liste (sortie d'un produit à 0). */
+function changerType() {
+  formulaire.value.lotChoisi = null
+  if (!etatActifs.value.some((m) => m.id === formulaire.value.medicamentId)) formulaire.value.medicamentId = null
+}
+// Médicaments actifs ; pour une SORTIE, seulement ceux qui ont du stock (> 0)
+const etatActifs = computed(() => props.etat.filter((m) => m.actif && (!estSortie.value || m.stock > 0)))
 const medicamentChoisi = computed(() => props.etat.find((m) => m.id === formulaire.value?.medicamentId) || null)
 const estSortie = computed(() => (TYPES_MOUVEMENT[formulaire.value?.type]?.sens ?? 1) < 0)
 
