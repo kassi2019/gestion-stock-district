@@ -25,6 +25,7 @@
         <ListeDeroulante v-model="filtres.statut" :options="optionsStatuts" placeholder="Tous les statuts" />
       </div>
       <span class="espace"></span>
+      <ImportExportTableau titre="Rapports centre de santé" :sous-titre="sousTitreExport" nom-fichier="rapports_centre" :colonnes-pdf="COLONNES_EXPORT" :lignes="rapportsAffiches" />
       <button v-si-modif @click="choix = { centreId: null, annee: anneeCourante, mois: moisPrecedent }">+ Ouvrir un rapport</button>
     </div>
 
@@ -94,6 +95,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import FenetreModale from '@/components/FenetreModale.vue'
 import ListeDeroulante from '@/components/ListeDeroulante.vue'
+import ImportExportTableau from '@/components/ImportExportTableau.vue'
 import FenetreRapportCentre from './FenetreRapportCentre.vue'
 import { listerRapportsCentre, ouvrirRapportCentre } from '@/api/consommations'
 import { libellePeriode, OPTIONS_MOIS, STATUTS_RAPPORT_CENTRE } from './consommationsCommun'
@@ -126,6 +128,30 @@ const rapportsAffiches = computed(() => {
   if (!texte) return rapports.value
   return rapports.value.filter((r) => [r.numero, r.centre.nom].some((v) => (v || '').toLowerCase().includes(texte)))
 })
+
+// ---------------------------------------------------------------------------
+// EXPORT PDF / EXCEL : les lignes affichées (filtres et recherche appliqués)
+// ---------------------------------------------------------------------------
+const sousTitreExport = computed(() => {
+  const c = centres.value.find((x) => x.id === filtres.centreId)
+  const m = OPTIONS_MOIS.find((x) => x.id === filtres.mois)
+  return [
+    c ? `Centre : ${c.nom}` : 'Tous les centres',
+    m ? `${m.libelle} ${filtres.annee || ''}` : `Année ${filtres.annee || 'toutes'}`,
+    filtres.statut ? STATUTS_RAPPORT_CENTRE[filtres.statut]?.libelle : '',
+  ]
+    .filter(Boolean)
+    .join(' — ')
+})
+
+const COLONNES_EXPORT = [
+  { titre: 'N°', valeur: (r) => r.numero },
+  { titre: 'Centre', valeur: (r) => r.centre.nom },
+  { titre: 'Mois', valeur: (r) => libellePeriode(r.annee, r.mois) },
+  { titre: 'Produits', valeur: (r) => r._count.lignes, droite: true },
+  { titre: 'Facture générée', valeur: (r) => r.facture?.numero || '—' },
+  { titre: 'Statut', valeur: (r) => STATUTS_RAPPORT_CENTRE[r.statut]?.libelle || r.statut },
+]
 
 async function charger() {
   chargement.value = true

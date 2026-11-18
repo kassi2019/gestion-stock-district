@@ -35,9 +35,9 @@
               <button v-for="p in PERIODES" :key="p.code" :class="{ actif: periode === p.code }" @click="choisirPeriode(p.code)">{{ p.libelle }}</button>
             </div>
             <div class="dates">
-              <input v-model="filtres.du" type="date" title="Du" @change="periode = 'perso'" />
+              <ChampDate v-model="filtres.du" title="Du" @change="periode = 'perso'" />
               <span>au</span>
-              <input v-model="filtres.au" type="date" title="Au" @change="periode = 'perso'" />
+              <ChampDate v-model="filtres.au" title="Au" @change="periode = 'perso'" />
             </div>
           </template>
           <div v-if="utilise('centre')" class="filtre">
@@ -62,6 +62,7 @@
 </template>
 
 <script setup>
+import ChampDate from '@/components/ChampDate.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import { useRoute, useRouter } from 'vue-router'

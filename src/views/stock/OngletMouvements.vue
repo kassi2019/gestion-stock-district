@@ -33,9 +33,9 @@
         <ListeDeroulante v-model="filtres.type" :options="OPTIONS_TYPES" placeholder="Tous les types" />
       </div>
       <div class="periode">
-        <input v-model="filtres.du" type="date" title="Du" />
+        <ChampDate v-model="filtres.du" title="Du" />
         <span>au</span>
-        <input v-model="filtres.au" type="date" title="Au" />
+        <ChampDate v-model="filtres.au" title="Au" />
       </div>
       <span class="espace"></span>
       <ImportExportTableau
@@ -133,7 +133,7 @@
           </div>
           <div>
             <label :class="{ obligatoire: medicamentChoisi?.suiviLot }">Date de péremption</label>
-            <input v-model="formulaire.datePeremption" type="date" :required="medicamentChoisi?.suiviLot" />
+            <ChampDate v-model="formulaire.datePeremption" :obligatoire="medicamentChoisi?.suiviLot" />
           </div>
         </template>
 
@@ -177,6 +177,7 @@
 </template>
 
 <script setup>
+import ChampDate from '@/components/ChampDate.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import FenetreModale from '@/components/FenetreModale.vue'
@@ -364,7 +365,6 @@ onMounted(charger)
 
 <style scoped>
 .periode { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
-.periode input { width: 150px; }
 .filtre.large { min-width: 300px; }
 .detail { font-size: 0.75rem; color: var(--muted); }
 .motif { max-width: 260px; font-size: 0.85rem; }

@@ -23,10 +23,12 @@
         <ListeDeroulante v-model="filtres.statut" :options="optionsStatuts(STATUTS_LIVRAISON)" placeholder="Tous les statuts" />
       </div>
       <div class="periode">
-        <input v-model="filtres.du" type="date" title="Du" />
+        <ChampDate v-model="filtres.du" title="Du" />
         <span>au</span>
-        <input v-model="filtres.au" type="date" title="Au" />
+        <ChampDate v-model="filtres.au" title="Au" />
       </div>
+      <span class="espace"></span>
+      <ImportExportTableau titre="Anciens bons de livraison" :sous-titre="sousTitreExport" nom-fichier="bons_de_livraison" :colonnes-pdf="COLONNES_EXPORT" :lignes="livraisonsAffichees" />
     </div>
 
     <div class="tableau-conteneur">
@@ -68,6 +70,14 @@
       <div class="bandeau-statut">
         <span class="badge" :class="STATUTS_LIVRAISON[detail.statut]?.badge">{{ STATUTS_LIVRAISON[detail.statut]?.libelle }}</span>
         <small>Du {{ formaterDate(detail.dateLivraison) }}<template v-if="detail.validateur"> — validé par {{ nomPersonne(detail.validateur) }}</template></small>
+        <span class="espace"></span>
+        <ImportExportTableau
+          :titre="`Bon de livraison ${detail.numero}`"
+          :sous-titre="`${detail.centre.nom} — ${formaterDate(detail.dateLivraison)}`"
+          :nom-fichier="`bon_livraison_${detail.numero}`"
+          :colonnes-pdf="COLONNES_DETAIL"
+          :lignes="detail.lignes"
+        />
       </div>
       <table class="tableau lignes">
         <thead>
@@ -106,11 +116,13 @@
 </template>
 
 <script setup>
+import ChampDate from '@/components/ChampDate.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import FenetreModale from '@/components/FenetreModale.vue'
 import ListeDeroulante from '@/components/ListeDeroulante.vue'
 import Pagination from '@/components/Pagination.vue'
+import ImportExportTableau from '@/components/ImportExportTableau.vue'
 import PiecesJointes from '@/components/PiecesJointes.vue'
 import { utiliserTableau } from '@/utils/pagination'
 import { nomPersonne } from '@/utils/documentPdf'
@@ -127,6 +139,35 @@ const detail = ref(null)
 const docPieces = ref(null)
 
 const centres = computed(() => store.state.referentiel.centres)
+
+// ---------------------------------------------------------------------------
+// EXPORT PDF / EXCEL : liste des bons (filtres appliqués) et détail d'un bon
+// ---------------------------------------------------------------------------
+const sousTitreExport = computed(() => {
+  const c = centres.value.find((x) => x.id === filtres.centreId)
+  return [
+    c ? `Centre : ${c.nom}` : 'Tous les centres',
+    filtres.du || filtres.au ? `Du ${filtres.du ? formaterDate(filtres.du) : '…'} au ${filtres.au ? formaterDate(filtres.au) : '…'}` : '',
+  ]
+    .filter(Boolean)
+    .join(' — ')
+})
+const COLONNES_EXPORT = [
+  { titre: 'N° livraison', valeur: (l) => l.numero },
+  { titre: 'Date', valeur: (l) => formaterDate(l.dateLivraison) },
+  { titre: 'Centre', valeur: (l) => l.centre?.nom || '' },
+  { titre: 'Lignes', valeur: (l) => l._count?.lignes ?? 0, droite: true },
+  { titre: 'Montant', valeur: (l) => formaterMontant(l.montantTotal), droite: true, somme: (l) => Number(l.montantTotal), formatTotal: formaterMontant },
+  { titre: 'Statut', valeur: (l) => STATUTS_LIVRAISON[l.statut]?.libelle || l.statut },
+]
+const COLONNES_DETAIL = [
+  { titre: 'Médicament', valeur: (l) => `${l.medicament.code} — ${l.medicament.designation}` },
+  { titre: 'Lot', valeur: (l) => l.lot?.numeroLot || '—' },
+  { titre: 'Péremption', valeur: (l) => (l.lot?.datePeremption ? formaterDate(l.lot.datePeremption) : '—') },
+  { titre: 'Quantité livrée', valeur: (l) => formaterNombre(l.quantiteLivree), droite: true },
+  { titre: 'Prix unitaire', valeur: (l) => formaterMontant(l.prixUnitaire), droite: true },
+  { titre: 'Montant', valeur: (l) => formaterMontant(l.montant), droite: true, somme: (l) => Number(l.montant), formatTotal: formaterMontant },
+]
 
 const livraisonsAffichees = computed(() => {
   const texte = recherche.value.toLowerCase()
@@ -172,8 +213,8 @@ onMounted(() => {
 <style scoped>
 .encart-info { margin-bottom: 1rem; padding: 0.6rem 0.9rem; border-radius: 8px; background: #e3eefc; color: #1d4f91; font-size: 0.88rem; }
 .periode { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
-.periode input { width: 150px; }
 .bandeau-statut { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1rem; }
+.bandeau-statut .espace { flex: 1; }
 .bandeau-statut small { color: var(--muted); }
 .lignes tfoot td { border-top: 2px solid var(--border); padding-top: 0.6rem; }
 .aide { font-size: 0.85rem; color: var(--muted); }

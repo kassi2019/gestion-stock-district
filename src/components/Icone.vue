@@ -74,6 +74,8 @@ const DESSINS = {
   telecharger: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
   // Document PDF
   pdf: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15h6M9 18h4M9 12h2"/>',
+  // Document Excel (feuille avec une grille)
+  excel: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 12h8M8 16h8M12 12v6"/>',
   // Coche (réussite)
   coche: '<circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/>',
   // Carte (cartographie des centres)

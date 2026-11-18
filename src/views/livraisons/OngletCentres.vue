@@ -16,6 +16,15 @@
         <ListeDeroulante v-model="centreId" :options="centres" champ-libelle="nom" placeholder="— Choisir un centre de santé —" />
       </div>
       <span class="espace"></span>
+      <!-- Export du sous-onglet affiché (stock, livraisons ou mouvements) -->
+      <ImportExportTableau
+        v-if="fiche"
+        :titre="exportVue.titre"
+        :sous-titre="fiche.centre.nom"
+        :nom-fichier="exportVue.nomFichier"
+        :colonnes-pdf="exportVue.colonnes"
+        :lignes="exportVue.lignes"
+      />
       <button v-if="fiche" v-si-imprimer class="bouton-secondaire" @click="stockCentrePdf(fiche)">Stock du centre (PDF)</button>
     </div>
 
@@ -115,6 +124,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import ListeDeroulante from '@/components/ListeDeroulante.vue'
 import Pagination from '@/components/Pagination.vue'
+import ImportExportTableau from '@/components/ImportExportTableau.vue'
 import { utiliserPagination } from '@/utils/pagination'
 import { formaterDate, formaterMontant, formaterNombre } from '@/utils/format'
 import { ficheCentre, trouverLivraison } from '@/api/livraisons'
@@ -148,6 +158,55 @@ const pageMouvements = utiliserPagination(mouvements, [centreId])
 const livraisonsValidees = computed(() => livraisons.value.filter((l) => l.statut === 'VALIDEE'))
 const montantLivre = computed(() => livraisonsValidees.value.reduce((t, l) => t + Number(l.montantTotal), 0))
 const derniereLivraison = computed(() => livraisonsValidees.value[0] || null) // liste triée par date décroissante
+
+// ---------------------------------------------------------------------------
+// EXPORT PDF / EXCEL : toutes les lignes du sous-onglet affiché
+// ---------------------------------------------------------------------------
+const nomUtilisateur = (u) => `${u?.prenoms || ''} ${u?.nom || ''}`.trim()
+const exportVue = computed(() => {
+  if (vue.value === 'livraisons') {
+    return {
+      titre: 'Livraisons du centre',
+      nomFichier: 'livraisons_centre',
+      lignes: livraisons.value,
+      colonnes: [
+        { titre: 'N° livraison', valeur: (l) => l.numero },
+        { titre: 'Date', valeur: (l) => formaterDate(l.dateLivraison) },
+        { titre: 'Lignes', valeur: (l) => l._count?.lignes ?? 0, droite: true },
+        { titre: 'Montant', valeur: (l) => formaterMontant(l.montantTotal), droite: true, somme: (l) => Number(l.montantTotal), formatTotal: formaterMontant },
+        { titre: 'Statut', valeur: (l) => STATUTS_LIVRAISON[l.statut]?.libelle || l.statut },
+      ],
+    }
+  }
+  if (vue.value === 'mouvements') {
+    return {
+      titre: 'Mouvements du stock du centre',
+      nomFichier: 'mouvements_centre',
+      lignes: mouvements.value,
+      colonnes: [
+        { titre: 'Date', valeur: (m) => formaterDate(m.dateMouvement) },
+        { titre: 'Type', valeur: (m) => TYPES_MOUVEMENT_CENTRE[m.type] || m.type },
+        { titre: 'Médicament', valeur: (m) => `${m.medicament.code} — ${m.medicament.designation}` },
+        { titre: 'Quantité', valeur: (m) => formaterNombre(m.quantite), droite: true },
+        { titre: 'Avant', valeur: (m) => formaterNombre(m.stockAvant), droite: true },
+        { titre: 'Après', valeur: (m) => formaterNombre(m.stockApres), droite: true },
+        { titre: 'Motif', valeur: (m) => m.motif || '' },
+        { titre: 'Par', valeur: (m) => nomUtilisateur(m.utilisateur) },
+      ],
+    }
+  }
+  return {
+    titre: 'Stock théorique du centre',
+    nomFichier: 'stock_centre',
+    lignes: stock.value,
+    colonnes: [
+      { titre: 'Code', valeur: (s) => s.medicament.code },
+      { titre: 'Médicament', valeur: (s) => s.medicament.designation },
+      { titre: 'Unité', valeur: (s) => s.medicament.uniteVente?.libelle || '' },
+      { titre: 'Stock théorique', valeur: (s) => formaterNombre(s.quantiteTheorique), droite: true },
+    ],
+  }
+})
 
 async function charger() {
   fiche.value = null

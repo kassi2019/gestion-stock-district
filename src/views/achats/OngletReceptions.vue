@@ -5,11 +5,18 @@
   Enregistrement de chaque livraison reçue d'un fournisseur du district.
   Il n'y a plus de commande (le district commande dans l'application nationale).
   - Saisie : fournisseur, date, n° de facture / bon de livraison du fournisseur,
-    et pour chaque produit : quantité reçue, n° de lot et date de péremption
-    (obligatoires seulement pour un médicament « suivi par lot »). Un même
-    médicament reçu en plusieurs lots : bouton « + lot ».
-  - PRIX D'ACHAT : repris des paramètres (Paramétrage > Prix), affiché mais
-    NON MODIFIABLE ; il est figé par le serveur à la validation.
+    et pour chaque produit : unité de comptage (affichée), quantité reçue,
+    prix d'achat, n° de lot et date de péremption (obligatoires seulement
+    pour un médicament « suivi par lot »), observation de la ligne.
+    Un même médicament reçu en plusieurs lots : bouton « + lot ».
+  - UNITÉ DE COMPTAGE : celle de la fiche du médicament (Paramétrage >
+    Unités de comptage) ; elle dit à quoi correspond la quantité saisie
+    (boîte, plaquette, flacon...). Non modifiable ici.
+  - PRIX D'ACHAT : le DERNIER PRIX D'ACHAT est proposé (dernière réception
+    validée, sinon Paramétrage > Prix) mais reste MODIFIABLE ; il est
+    enregistré sur la ligne de réception, pas sur la fiche du médicament.
+  - PÉREMPTION : trois cases jour / mois / année (composant ChampDate).
+  - OBSERVATIONS : une générale (toute la réception) + une par ligne.
   - Brouillon (modifiable) -> VALIDÉE : c'est la VALIDATION qui fait entrer
     les médicaments dans le STOCK du district (irréversible ; une erreur se
     corrige par un ajustement dans le module Stock).
@@ -30,9 +37,9 @@
         <ListeDeroulante v-model="filtres.statut" :options="optionsStatuts(STATUTS_RECEPTION)" placeholder="Tous les statuts" />
       </div>
       <div class="periode">
-        <input v-model="filtres.du" type="date" title="Du" />
+        <ChampDate v-model="filtres.du" title="Du" />
         <span>au</span>
-        <input v-model="filtres.au" type="date" title="Au" />
+        <ChampDate v-model="filtres.au" title="Au" />
       </div>
       <span class="espace"></span>
       <ImportExportTableau
@@ -87,6 +94,7 @@
       v-if="formulaire"
       :titre="formulaire.id ? `Réception ${formulaire.numero}` : 'Nouvelle réception'"
       tres-large
+      class="fenetre-reception"
       @fermer="formulaire = null"
     >
       <!-- Réception validée : rappel et bon de réception -->
@@ -106,7 +114,7 @@
         <small v-else-if="formulaire.statut === 'BROUILLON'">Brouillon : le stock ne bouge qu'à la validation.</small>
       </div>
 
-      <form id="form-reception" class="grille-formulaire trois-colonnes" @submit.prevent="enregistrer(false)">
+      <form id="form-reception" class="grille-formulaire quatre-colonnes" @submit.prevent="enregistrer(false)">
         <div>
           <label class="obligatoire">Fournisseur</label>
           <ListeDeroulante
@@ -120,7 +128,7 @@
         </div>
         <div>
           <label class="obligatoire">Date de réception</label>
-          <input v-model="formulaire.dateReception" type="date" required :disabled="lectureSeule" @change="actualiserPrix" />
+          <ChampDate v-model="formulaire.dateReception" obligatoire :desactive="lectureSeule" @change="actualiserPrix" />
         </div>
         <div>
           <label>N° facture fournisseur</label>
@@ -133,19 +141,31 @@
 
         <!-- ---------- Lignes ---------- -->
         <div class="pleine-largeur">
-          <h4 class="section">Médicaments reçus</h4>
+          <div class="titre-avec-export">
+            <h4 class="section">Médicaments reçus</h4>
+            <ImportExportTableau
+              :titre="`Réception ${formulaire.numero || '(nouvelle)'}`"
+              :sous-titre="formulaire.dateReception ? `Du ${formaterDate(formulaire.dateReception)}` : ''"
+              :nom-fichier="`reception_${formulaire.numero || 'nouvelle'}`"
+              :colonnes-pdf="COLONNES_LIGNES"
+              :lignes="formulaire.lignes.filter((l) => l.medicamentId)"
+            />
+          </div>
           <p v-if="!lectureSeule" class="aide-prix">
-            Le prix d'achat est repris de Paramétrage &gt; Prix et n'est pas modifiable ici.
+            Le prix d'achat proposé est le dernier prix payé pour ce médicament : modifiez-le s'il a changé.
+            Les quantités et prix sont par unité de comptage.
           </p>
           <table class="tableau lignes">
             <thead>
               <tr>
                 <th>Médicament</th>
+                <th>Unité de comptage</th>
                 <th class="nombre">Qté reçue</th>
                 <th class="nombre">Prix d'achat</th>
                 <th>N° de lot</th>
                 <th>Péremption</th>
                 <th class="nombre">Montant</th>
+                <th>Observation</th>
                 <th v-if="!lectureSeule"></th>
               </tr>
             </thead>
@@ -161,20 +181,38 @@
                     @update:model-value="(id) => choisirMedicament(ligne, id)"
                   />
                   <span v-else>{{ libelleMedicament(ligne.medicamentId) }}</span>
-                  <small class="detail">
-                    <template v-if="uniteDe(ligne.medicamentId)">par {{ uniteDe(ligne.medicamentId) }}</template>
-                    <span v-if="suiviLot(ligne.medicamentId)" class="lot-requis"> · lot et péremption obligatoires</span>
-                  </small>
+                  <small v-if="suiviLot(ligne.medicamentId)" class="detail lot-requis">lot et péremption obligatoires</small>
                 </td>
+                <!-- Unité de comptage : celle de la fiche du médicament (à quoi correspond la quantité) -->
+                <td class="col-unite">{{ uniteDe(ligne.medicamentId) || '—' }}</td>
                 <td class="nombre"><input v-model.number="ligne.quantite" type="number" min="1" step="1" required :disabled="lectureSeule" /></td>
+                <!-- Prix d'achat : dernier prix proposé, modifiable -->
                 <td class="nombre">
-                  <span v-if="ligne.prixUnitaire !== null && ligne.prixUnitaire !== undefined">{{ formaterMontant(ligne.prixUnitaire) }}</span>
-                  <span v-else-if="ligne.medicamentId" class="prix-manquant" title="Définissez le prix d'achat dans Paramétrage > Prix">Prix non défini</span>
-                  <span v-else class="detail">—</span>
+                  <input
+                    v-model.number="ligne.prixUnitaire"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    class="champ-prix"
+                    :class="{ 'prix-manquant': ligne.medicamentId && !prixSaisi(ligne) }"
+                    :placeholder="ligne.medicamentId ? 'À saisir' : ''"
+                    :required="!!ligne.medicamentId"
+                    :disabled="lectureSeule"
+                  />
                 </td>
                 <td><input v-model.trim="ligne.numeroLot" maxlength="50" class="champ-lot" :required="suiviLot(ligne.medicamentId)" :disabled="lectureSeule" /></td>
-                <td><input v-model="ligne.datePeremption" type="date" :required="suiviLot(ligne.medicamentId)" :disabled="lectureSeule" /></td>
+                <td><ChampDate v-model="ligne.datePeremption" :obligatoire="suiviLot(ligne.medicamentId)" :desactive="lectureSeule" /></td>
                 <td class="nombre"><strong>{{ formaterMontant((ligne.quantite || 0) * (ligne.prixUnitaire || 0)) }}</strong></td>
+                <td>
+                  <input
+                    v-if="!lectureSeule"
+                    v-model.trim="ligne.observation"
+                    maxlength="500"
+                    class="champ-observation"
+                    placeholder="Facultatif"
+                  />
+                  <span v-else>{{ ligne.observation || '' }}</span>
+                </td>
                 <td v-if="!lectureSeule" class="actions">
                   <button type="button" class="bouton-lien" title="Même médicament, autre lot" @click="ajouterLot(index)">+ lot</button>
                   <button type="button" class="bouton-lien danger" title="Retirer la ligne" @click="formulaire.lignes.splice(index, 1)">✕</button>
@@ -183,12 +221,13 @@
             </tbody>
             <tfoot>
               <tr>
-                <td colspan="5">
+                <td colspan="6">
                   <button v-if="!lectureSeule" type="button" class="bouton-lien" @click="ajouterLigne">
                     + Ajouter un médicament
                   </button>
                 </td>
                 <td class="nombre total">{{ formaterMontant(totalFormulaire) }}</td>
+                <td></td>
                 <td v-if="!lectureSeule"></td>
               </tr>
             </tfoot>
@@ -196,7 +235,7 @@
         </div>
 
         <div class="pleine-largeur">
-          <label>Observations</label>
+          <label>Observations générales (toute la réception)</label>
           <textarea v-model.trim="formulaire.observations" rows="2" maxlength="2000" :disabled="lectureSeule"></textarea>
         </div>
       </form>
@@ -234,6 +273,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import FenetreModale from '@/components/FenetreModale.vue'
+import ChampDate from '@/components/ChampDate.vue'
 import ListeDeroulante from '@/components/ListeDeroulante.vue'
 import ImportExportTableau from '@/components/ImportExportTableau.vue'
 import Pagination from '@/components/Pagination.vue'
@@ -307,9 +347,14 @@ function videFormulaire() {
     lignes: [nouvelleLigne()],
   }
 }
-/** Ligne vide. prixUnitaire = null tant que le prix n'est pas connu (repris des paramètres). */
+/** Ligne vide. prixUnitaire = null tant que le prix n'est ni proposé ni saisi. */
 function nouvelleLigne(medicamentId = null, quantite = 1, prixUnitaire = null) {
-  return { medicamentId, quantite, prixUnitaire, numeroLot: '', datePeremption: '' }
+  return { medicamentId, quantite, prixUnitaire, numeroLot: '', datePeremption: '', observation: '' }
+}
+
+/** Vrai si la ligne a un prix d'achat (0 accepté, ex. don). */
+function prixSaisi(ligne) {
+  return ligne.prixUnitaire !== null && ligne.prixUnitaire !== undefined && ligne.prixUnitaire !== '' && Number(ligne.prixUnitaire) >= 0
 }
 
 /** Ouvre une réception existante (détail) ou une nouvelle réception. */
@@ -332,27 +377,33 @@ async function ouvrirFormulaire(reception = null) {
         prixUnitaire: Number(l.prixUnitaire),
         numeroLot: l.numeroLot || '',
         datePeremption: l.datePeremption ? l.datePeremption.substring(0, 10) : '',
+        observation: l.observation || '',
       })),
     }
-    // Brouillon : prix actualisés (ils ont pu changer dans les paramètres)
-    if (r.statut === 'BROUILLON') await actualiserPrix()
+    // Brouillon : les prix saisis sont gardés tels quels (pas de recalcul)
   } catch (erreur) {
     store.dispatch('notifications/erreurApi', erreur)
   }
 }
 
 /**
- * Prix d'achat de chaque ligne, repris des paramètres pour le fournisseur et
- * la date de réception. Appelé quand le fournisseur, la date ou un médicament change.
+ * Propose le DERNIER PRIX D'ACHAT (calculé par le serveur : dernière réception
+ * validée chez ce fournisseur, sinon chez un autre, sinon Paramétrage > Prix).
+ * Seules les lignes SANS PRIX sont remplies : un prix déjà tapé par
+ * l'utilisateur n'est jamais écrasé.
+ * Appelé quand le fournisseur, la date ou un médicament change.
  */
 async function actualiserPrix() {
   const f = formulaire.value
   if (!f || lectureSeule.value) return
-  const ids = [...new Set(f.lignes.map((l) => l.medicamentId).filter(Boolean))]
+  const aCompleter = f.lignes.filter((l) => l.medicamentId && !prixSaisi(l))
+  const ids = [...new Set(aCompleter.map((l) => l.medicamentId))]
+  if (ids.length === 0) return
   try {
     const prix = await prixAchatReception({ medicamentIds: ids, fournisseurId: f.fournisseurId, date: f.dateReception })
-    for (const ligne of f.lignes) {
-      ligne.prixUnitaire = ligne.medicamentId ? prix[ligne.medicamentId] ?? null : null
+    for (const ligne of aCompleter) {
+      // L'utilisateur a pu taper un prix pendant l'appel au serveur : on ne l'écrase pas
+      if (!prixSaisi(ligne)) ligne.prixUnitaire = prix[ligne.medicamentId] ?? null
     }
   } catch (erreur) {
     store.dispatch('notifications/erreurApi', erreur)
@@ -369,7 +420,7 @@ function ajouterLot(index) {
   formulaire.value.lignes.splice(index + 1, 0, nouvelleLigne(l.medicamentId, 1, l.prixUnitaire))
 }
 
-/** Médicament choisi : son prix d'achat est repris des paramètres. */
+/** Médicament choisi : son dernier prix d'achat est proposé. */
 function choisirMedicament(ligne, medicamentId) {
   ligne.prixUnitaire = null
   if (medicamentId) actualiserPrix()
@@ -383,7 +434,7 @@ function libelleMedicament(id) {
   return m ? `${m.code} — ${m.designation}` : '—'
 }
 function uniteDe(id) {
-  return medicament(id)?.uniteVente?.libelle?.toLowerCase() || ''
+  return medicament(id)?.uniteVente?.libelle || ''
 }
 function suiviLot(id) {
   return !!medicament(id)?.suiviLot
@@ -399,13 +450,15 @@ const totalFormulaire = computed(() =>
  */
 async function enregistrer(valider) {
   const f = formulaire.value
+  // Champs obligatoires et dates incomplètes : message du navigateur sur la case concernée
+  if (!document.getElementById('form-reception')?.reportValidity()) return
   if (!f.fournisseurId) return store.dispatch('notifications/erreur', 'Choisissez le fournisseur.')
   const lignes = f.lignes.filter((l) => l.medicamentId)
   if (lignes.length === 0) return store.dispatch('notifications/erreur', 'Ajoutez au moins un médicament reçu.')
   if (lignes.some((l) => !(l.quantite >= 1))) return store.dispatch('notifications/erreur', 'Chaque quantité reçue doit être au moins 1.')
-  const sansPrix = lignes.find((l) => l.prixUnitaire === null || l.prixUnitaire === undefined)
+  const sansPrix = lignes.find((l) => !prixSaisi(l))
   if (sansPrix) {
-    return store.dispatch('notifications/erreur', `${libelleMedicament(sansPrix.medicamentId)} : pas de prix d'achat. Définissez-le dans Paramétrage > Prix.`)
+    return store.dispatch('notifications/erreur', `${libelleMedicament(sansPrix.medicamentId)} : saisissez le prix d'achat.`)
   }
 
   if (valider) {
@@ -432,8 +485,10 @@ async function enregistrer(valider) {
       lignes: lignes.map((l) => ({
         medicamentId: l.medicamentId,
         quantite: Number(l.quantite),
+        prixUnitaire: Number(l.prixUnitaire),
         numeroLot: l.numeroLot || undefined,
         datePeremption: l.datePeremption || undefined,
+        observation: l.observation || undefined,
       })),
     }
     let reception = f.id ? await modifierReception(f.id, donnees) : await creerReception(donnees)
@@ -506,6 +561,19 @@ const sousTitrePdf = computed(() => {
   ].filter(Boolean).join(' — ')
 })
 
+// Export PDF / Excel des lignes de la fenêtre de réception
+const COLONNES_LIGNES = [
+  { titre: 'Médicament', valeur: (l) => libelleMedicament(l.medicamentId) },
+  { titre: 'Unité de comptage', valeur: (l) => uniteDe(l.medicamentId) },
+  { titre: 'Qté reçue', valeur: (l) => formaterNombre(Number(l.quantite) || 0), droite: true, somme: (l) => Number(l.quantite) || 0 },
+  { titre: "Prix d'achat", valeur: (l) => (prixSaisi(l) ? formaterMontant(l.prixUnitaire) : 'À saisir'), droite: true },
+  { titre: 'N° de lot', valeur: (l) => l.numeroLot || '' },
+  { titre: 'Péremption', valeur: (l) => (l.datePeremption ? formaterDate(l.datePeremption) : '') },
+  { titre: 'Montant', valeur: (l) => formaterMontant((l.quantite || 0) * (l.prixUnitaire || 0)), droite: true,
+    somme: (l) => (l.quantite || 0) * (l.prixUnitaire || 0), formatTotal: formaterMontant },
+  { titre: 'Observation', valeur: (l) => l.observation || '' },
+]
+
 const COLONNES_PDF = [
   { titre: 'N° réception', valeur: (r) => r.numero },
   { titre: 'Date', valeur: (r) => formaterDate(r.dateReception) },
@@ -525,7 +593,6 @@ onMounted(() => {
 
 <style scoped>
 .periode { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
-.periode input { width: 150px; }
 .detail { font-size: 0.78rem; color: var(--muted); }
 .bandeau-statut { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1rem; }
 .bandeau-statut small { color: var(--muted); }
@@ -538,18 +605,22 @@ onMounted(() => {
   letter-spacing: 0.06em;
   color: var(--primary);
 }
-.grille-formulaire.trois-colonnes { grid-template-columns: repeat(3, 1fr); }
+/* Fenêtre de réception : un peu plus large que « très large » (1200 px) pour éviter de défiler */
+.fenetre-reception :deep(.fenetre) { max-width: 1400px; }
+.grille-formulaire.quatre-colonnes { grid-template-columns: repeat(4, 1fr); }
 @media (max-width: 900px) {
-  .grille-formulaire.trois-colonnes { grid-template-columns: 1fr 1fr; }
+  .grille-formulaire.quatre-colonnes { grid-template-columns: 1fr 1fr; }
 }
 .lignes td { padding: 0.45rem 0.4rem; }
 .lignes .col-medicament { min-width: 240px; }
 .lignes .col-medicament .detail { display: block; }
 .lignes input[type='number'] { width: 90px; text-align: right; }
-.lignes input[type='date'] { width: 140px; }
 .champ-lot { width: 120px; }
+.lignes .champ-prix { width: 110px; }
+.champ-observation { width: 160px; }
+.col-unite { white-space: nowrap; color: var(--muted); }
 .lot-requis { color: #b35c00; font-weight: 600; }
-.prix-manquant { color: #c0392b; font-weight: 600; font-size: 0.8rem; }
+.lignes .prix-manquant { border-color: #c0392b; }
 .aide-prix { margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--muted); }
 .lignes .total { font-size: 1.05rem; font-weight: 800; color: var(--primary-dark); }
 .lignes tfoot td { border-bottom: none; }

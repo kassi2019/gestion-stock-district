@@ -21,6 +21,20 @@
  */
 import { infosDistrict } from '@/utils/exportPdf'
 
+/**
+ * Retrouve un nombre à partir d'un texte affiché à l'écran.
+ *   "12 500 FCFA" -> 12500 ;  "1 250,5" -> 1250.5 ;  "-3" -> -3 ;  "+3" -> 3
+ *   "—", "-", "", "Paracétamol" -> null (ce n'est pas un nombre : on garde le texte)
+ */
+function texteEnNombre(texte) {
+  const propre = String(texte)
+    .replace(/FCFA/gi, '')
+    .replace(/[\s  ]/g, '') // espaces, y compris les espaces insécables des milliers
+    .replace(',', '.')
+  if (!/^[+-]?\d+(\.\d+)?$/.test(propre)) return null
+  return Number(propre)
+}
+
 async function chargerExcelJS() {
   const module = await import('exceljs')
   return module.default || module
@@ -55,10 +69,24 @@ export async function exporterExcel({ titre, sousTitre = '', colonnes, lignes, n
   for (const ligne of lignes) {
     // « nombre » : cellule numérique, sauf « excelTexte » (dates, mois : texte lisible)
     const numerique = (c) => c.nombre && !c.excelTexte
-    const ligneExcel = feuille.addRow(colonnes.map((c) => (numerique(c) ? c.nombre(ligne) ?? null : c.valeur(ligne) ?? '')))
+    const ligneExcel = feuille.addRow(
+      colonnes.map((c) => {
+        if (numerique(c)) return c.nombre(ligne) ?? null
+        const texte = c.valeur(ligne) ?? ''
+        // Colonne de chiffres (alignée à droite) sans « nombre » : on retrouve le
+        // nombre à partir du texte affiché (« 12 500 FCFA » -> 12500) pour
+        // qu'Excel puisse faire des calculs. Sinon on garde le texte.
+        if (c.droite && !c.excelTexte) {
+          const valeur = texteEnNombre(texte)
+          if (valeur !== null) return valeur
+        }
+        return texte
+      }),
+    )
     colonnes.forEach((c, i) => {
-      if (numerique(c)) ligneExcel.getCell(i + 1).numFmt = '# ##0'
-      if (c.droite) ligneExcel.getCell(i + 1).alignment = { horizontal: 'right' }
+      const cellule = ligneExcel.getCell(i + 1)
+      if (typeof cellule.value === 'number') cellule.numFmt = Number.isInteger(cellule.value) ? '#,##0' : '#,##0.00'
+      if (c.droite) cellule.alignment = { horizontal: 'right' }
     })
   }
 
@@ -73,7 +101,7 @@ export async function exporterExcel({ titre, sousTitre = '', colonnes, lignes, n
     total.eachCell((cellule, numero) => {
       cellule.font = { bold: true }
       cellule.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE6F6EF' } }
-      if (colonnes[numero - 1]?.somme) cellule.numFmt = '# ##0'
+      if (colonnes[numero - 1]?.somme) cellule.numFmt = '#,##0'
     })
   }
 

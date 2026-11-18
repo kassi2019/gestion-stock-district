@@ -5,13 +5,24 @@
   Propriétés :
     - lignes  : liste des prix (renvoyée par l'API) ;
     - colonne : titre de la 2e colonne ("Centre" ou "Fournisseur") ;
-    - libelle : fonction qui donne le texte de la 2e colonne pour une ligne.
+    - libelle : fonction qui donne le texte de la 2e colonne pour une ligne ;
+    - titre-export / sous-titre-export / nom-fichier : pour les boutons PDF / Excel.
   Événement :
     - @corriger(ligne) : clic sur « Corriger » (seulement sur un prix EN COURS).
 -->
 <template>
   <div class="tableau-conteneur">
-    <h4>Historique</h4>
+    <div class="titre-avec-export">
+      <h4>Historique</h4>
+      <ImportExportTableau
+        v-if="lignes.length"
+        :titre="titreExport"
+        :sous-titre="sousTitreExport"
+        :nom-fichier="nomFichier"
+        :colonnes-pdf="COLONNES_EXPORT"
+        :lignes="lignesTriees"
+      />
+    </div>
     <p v-if="lignes.length === 0" class="tableau-vide">Aucun prix enregistré.</p>
 
     <table v-else class="tableau">
@@ -55,6 +66,7 @@ import { toRef } from 'vue'
 import { formaterDate, formaterMontant } from '@/utils/format'
 import Pagination from '@/components/Pagination.vue'
 import ColonneTri from '@/components/ColonneTri.vue'
+import ImportExportTableau from '@/components/ImportExportTableau.vue'
 import { utiliserTableau } from '@/utils/pagination'
 
 const emit = defineEmits(['corriger'])
@@ -63,7 +75,19 @@ const props = defineProps({
   lignes: { type: Array, required: true },
   colonne: { type: String, required: true },
   libelle: { type: Function, required: true },
+  titreExport: { type: String, default: 'Historique des prix' },
+  sousTitreExport: { type: String, default: '' },
+  nomFichier: { type: String, default: 'historique_prix' },
 })
+
+// Export PDF / Excel : toutes les lignes, dans l'ordre du tri choisi
+const COLONNES_EXPORT = [
+  { titre: 'Prix', valeur: (p) => formaterMontant(p.prix), droite: true },
+  { titre: props.colonne, valeur: (p) => props.libelle(p) },
+  { titre: 'Du', valeur: (p) => formaterDate(p.dateEffet) },
+  { titre: 'Au', valeur: (p) => (p.dateFin ? formaterDate(p.dateFin) : '—') },
+  { titre: 'Statut', valeur: (p) => (p.dateFin ? 'Clôturé' : 'En cours') },
+]
 
 // Pagination de l'historique (retour à la page 1 quand on change de médicament)
 const lignes = toRef(props, 'lignes')

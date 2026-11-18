@@ -133,6 +133,12 @@
             <button v-if="!lectureSeule && formulaire.centreId" type="button" class="bouton-lien" @click="ajouterMedicamentsDuCentre">
               + Ajouter les médicaments du centre ({{ stockCentre.filter((s) => s.quantiteTheorique > 0).length }})
             </button>
+            <ImportExportTableau
+              :titre="`Rapport de consommation ${formulaire.numero || '(nouveau)'}`"
+              :nom-fichier="`rapport_consommation_${formulaire.numero || 'nouveau'}`"
+              :colonnes-pdf="colonnesLignesRapport"
+              :lignes="formulaire.lignes.filter((l) => l.medicamentId)"
+            />
           </div>
           <table class="tableau lignes">
             <thead>
@@ -231,7 +237,7 @@
       <form id="form-verification" class="grille-formulaire" @submit.prevent="enregistrerVerification">
         <div>
           <label class="obligatoire">Date de la visite</label>
-          <input v-model="verification.dateVerification" type="date" :max="dateDuJour()" required />
+          <ChampDate v-model="verification.dateVerification" :max="dateDuJour()" obligatoire />
         </div>
         <div>
           <label>Agents présents</label>
@@ -241,6 +247,12 @@
           <div class="entete-section">
             <h4 class="section">Quantités constatées</h4>
             <button type="button" class="bouton-lien" @click="verification.lignes.forEach((l) => (l.quantiteVerifiee = l.quantite))">Tout conforme (constaté = déclaré)</button>
+            <ImportExportTableau
+              :titre="`Vérification sur place — ${formulaire.numero}`"
+              :nom-fichier="`verification_${formulaire.numero}`"
+              :colonnes-pdf="COLONNES_VERIFICATION"
+              :lignes="verification.lignes"
+            />
           </div>
           <table class="tableau lignes">
             <thead>
@@ -281,6 +293,7 @@
 </template>
 
 <script setup>
+import ChampDate from '@/components/ChampDate.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import FenetreModale from '@/components/FenetreModale.vue'
@@ -671,6 +684,29 @@ const sousTitrePdf = computed(() => {
     filtres.statut ? STATUTS_RAPPORT[filtres.statut].libelle : 'tous les statuts',
   ].join(' — ')
 })
+// Export PDF / Excel des tableaux des fenêtres
+const colonnesLignesRapport = computed(() => [
+  { titre: 'Médicament', valeur: (l) => libelleMedicament(l.medicamentId) },
+  { titre: 'Stock théorique', valeur: (l) => formaterNombre(stockTheorique(l)), droite: true },
+  { titre: 'Déclaré', valeur: (l) => formaterNombre(Number(l.quantite) || 0), droite: true, somme: (l) => Number(l.quantite) || 0 },
+  ...(formulaire.value?.dateVerification
+    ? [
+        { titre: 'Vérifié', valeur: (l) => (l.quantiteVerifiee === null || l.quantiteVerifiee === undefined ? '—' : formaterNombre(l.quantiteVerifiee)), droite: true },
+        { titre: 'Écart', valeur: (l) => texteEcart(l), droite: true },
+      ]
+    : []),
+  { titre: 'Prix unitaire', valeur: (l) => formaterMontant(prixDe(l)), droite: true },
+  { titre: 'Montant', valeur: (l) => formaterMontant(montantLigne(l)), droite: true, somme: (l) => montantLigne(l), formatTotal: formaterMontant },
+])
+const COLONNES_VERIFICATION = [
+  { titre: 'Médicament', valeur: (l) => l.libelle },
+  { titre: 'Stock théorique', valeur: (l) => formaterNombre(l.stockTheorique), droite: true },
+  { titre: 'Déclaré', valeur: (l) => formaterNombre(l.quantite), droite: true },
+  { titre: 'Constaté', valeur: (l) => (l.quantiteVerifiee === null || l.quantiteVerifiee === undefined || l.quantiteVerifiee === '' ? '' : formaterNombre(l.quantiteVerifiee)), droite: true },
+  { titre: 'Écart', valeur: (l) => texteEcart(l), droite: true },
+  { titre: 'Commentaire', valeur: (l) => l.commentaire || '' },
+]
+
 const COLONNES_PDF = [
   { titre: 'N° rapport', valeur: (r) => r.numero },
   { titre: 'Période', valeur: (r) => libellePeriode(r.annee, r.mois) },

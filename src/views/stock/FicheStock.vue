@@ -14,11 +14,19 @@
     <div class="barre-outils">
       <div class="periode">
         <span>Période du</span>
-        <input v-model="du" type="date" />
+        <ChampDate v-model="du" />
         <span>au</span>
-        <input v-model="au" type="date" />
+        <ChampDate v-model="au" />
       </div>
       <span class="espace"></span>
+      <ImportExportTableau
+        v-if="fiche"
+        :titre="`Mouvements — ${fiche.medicament.designation}`"
+        :sous-titre="`Du ${formaterDate(du)} au ${formaterDate(au)}`"
+        :nom-fichier="`mouvements_${fiche.medicament.code}`"
+        :colonnes-pdf="COLONNES_EXPORT"
+        :lignes="lignesExport"
+      />
       <button v-if="fiche" v-si-imprimer class="bouton-secondaire" @click="ficheStockPdf(fiche, du, au)">Fiche de stock PDF</button>
     </div>
 
@@ -76,10 +84,12 @@
 </template>
 
 <script setup>
-import { onMounted, ref, watch } from 'vue'
+import ChampDate from '@/components/ChampDate.vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import FenetreModale from '@/components/FenetreModale.vue'
-import { formaterNombre } from '@/utils/format'
+import ImportExportTableau from '@/components/ImportExportTableau.vue'
+import { formaterDate, formaterNombre } from '@/utils/format'
 import { ficheStock } from '@/api/stock'
 import { ficheStockPdf, TYPES_MOUVEMENT } from './stockCommun'
 
@@ -90,6 +100,25 @@ const emit = defineEmits(['fermer'])
 const store = useStore()
 
 const fiche = ref(null)
+
+// ---------------------------------------------------------------------------
+// EXPORT PDF / EXCEL : ligne « stock au début », puis les mouvements
+// ---------------------------------------------------------------------------
+const lignesExport = computed(() =>
+  fiche.value ? [{ id: 'debut', debut: true, stockApres: fiche.value.stockInitial }, ...fiche.value.mouvements] : [],
+)
+const sens = (mv) => TYPES_MOUVEMENT[mv.type]?.sens || 0
+const COLONNES_EXPORT = [
+  { titre: 'Date', valeur: (mv) => (mv.debut ? formaterDate(du.value) : formaterDateHeure(mv.dateMouvement)) },
+  { titre: 'Mouvement', valeur: (mv) => (mv.debut ? 'Stock au début de la période' : TYPES_MOUVEMENT[mv.type]?.libelle || mv.type) },
+  { titre: 'Pièce', valeur: (mv) => (mv.debut ? '' : mv.pieceRef || '—') },
+  { titre: 'Lot', valeur: (mv) => (mv.debut ? '' : mv.lot?.numeroLot || '—') },
+  { titre: 'Motif', valeur: (mv) => (mv.debut ? '' : mv.motif || '—') },
+  { titre: 'Entrée', valeur: (mv) => (sens(mv) > 0 ? formaterNombre(mv.quantite) : ''), droite: true },
+  { titre: 'Sortie', valeur: (mv) => (sens(mv) < 0 ? formaterNombre(mv.quantite) : ''), droite: true },
+  { titre: 'Solde', valeur: (mv) => formaterNombre(mv.stockApres), droite: true },
+  { titre: 'Par', valeur: (mv) => (mv.debut ? '' : `${mv.utilisateur?.prenoms || ''} ${mv.utilisateur?.nom || ''}`.trim()) },
+]
 const chargement = ref(false)
 const du = ref('')
 const au = ref('')
@@ -116,7 +145,6 @@ onMounted(charger)
 
 <style scoped>
 .periode { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--muted); }
-.periode input { width: 150px; }
 .resume { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-bottom: 1rem; }
 .resume div { display: flex; flex-direction: column; padding: 0.65rem 0.9rem; border-radius: 10px; background: var(--fond-pale); font-size: 0.8rem; color: var(--muted); }
 .resume strong { font-size: 1.25rem; color: var(--texte-sur-fond); }

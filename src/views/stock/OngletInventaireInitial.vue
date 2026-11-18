@@ -61,10 +61,17 @@
           <div class="barre-outils">
             <div>
               <label class="obligatoire">Date de mise en service</label>
-              <input v-model="formulaire.dateInventaire" type="date" :max="dateDuJour()" :disabled="lectureSeule" />
+              <ChampDate v-model="formulaire.dateInventaire" :max="dateDuJour()" :desactive="lectureSeule" />
             </div>
             <input v-model="recherche" class="recherche" type="search" placeholder="Filtrer les lignes…" />
             <span class="espace"></span>
+            <ImportExportTableau
+              :titre="`Inventaire initial — ${nomEntite}`"
+              :sous-titre="`Au ${formaterDate(formulaire.dateInventaire)}`"
+              :nom-fichier="`inventaire_initial_${estDistrict ? 'district' : 'centre_' + entite}`"
+              :colonnes-pdf="colonnesExport"
+              :lignes="lignesExport"
+            />
             <button v-if="!lectureSeule" type="button" class="bouton-secondaire" @click="ajouterTous">
               + Tous les médicaments actifs
             </button>
@@ -98,7 +105,7 @@
                   </td>
                   <template v-if="estDistrict">
                     <td><input v-model.trim="ligne.numeroLot" maxlength="50" class="champ-lot" :disabled="lectureSeule" /></td>
-                    <td><input v-model="ligne.datePeremption" type="date" :disabled="lectureSeule" /></td>
+                    <td><ChampDate v-model="ligne.datePeremption" :desactive="lectureSeule" /></td>
                   </template>
                   <td class="nombre"><input v-model.number="ligne.quantite" type="number" min="0" step="1" :disabled="lectureSeule" /></td>
                   <td v-if="!lectureSeule" class="actions">
@@ -131,9 +138,11 @@
 </template>
 
 <script setup>
+import ChampDate from '@/components/ChampDate.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useStore } from 'vuex'
 import ListeDeroulante from '@/components/ListeDeroulante.vue'
+import ImportExportTableau from '@/components/ImportExportTableau.vue'
 import { confirmer } from '@/utils/alertes'
 import { dateDuJour, formaterDate, formaterNombre } from '@/utils/format'
 import { enregistrerInventaireInitial, etatInventaireInitial, lireInventaireInitial } from '@/api/stock'
@@ -177,6 +186,21 @@ function nouvelleLigne(medicamentId = null, quantite = 0, numeroLot = '', datePe
 }
 
 /** Lignes filtrées par la recherche (sur le libellé du médicament ou le lot). */
+// ---------------------------------------------------------------------------
+// EXPORT PDF / EXCEL : lignes affichées ayant un médicament
+// ---------------------------------------------------------------------------
+const lignesExport = computed(() => lignesAffichees.value.filter((l) => l.medicamentId))
+const colonnesExport = computed(() => [
+  { titre: 'Médicament', valeur: (l) => libelleMedicament(l.medicamentId) },
+  ...(estDistrict.value
+    ? [
+        { titre: 'N° de lot', valeur: (l) => l.numeroLot || '' },
+        { titre: 'Péremption', valeur: (l) => (l.datePeremption ? formaterDate(l.datePeremption) : '') },
+      ]
+    : []),
+  { titre: 'Quantité', valeur: (l) => formaterNombre(Number(l.quantite) || 0), droite: true, somme: (l) => Number(l.quantite) || 0 },
+])
+
 const lignesAffichees = computed(() => {
   const texte = recherche.value.toLowerCase()
   const lignes = formulaire.value?.lignes || []
@@ -347,7 +371,6 @@ onMounted(async () => {
 .lignes td { padding: 0.45rem 0.4rem; }
 .lignes .col-medicament { min-width: 260px; }
 .lignes input[type='number'] { width: 100px; text-align: right; }
-.lignes input[type='date'] { width: 140px; }
 .champ-lot { width: 120px; }
 .lignes .total { font-weight: 800; color: var(--primary-dark); }
 .lignes tfoot td { border-bottom: none; }

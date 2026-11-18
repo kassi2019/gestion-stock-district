@@ -23,9 +23,9 @@
         <ListeDeroulante v-model="filtres.mode" :options="options(MODES_PAIEMENT)" placeholder="Tous les modes" />
       </div>
       <div class="periode">
-        <input v-model="filtres.du" type="date" title="Du" />
+        <ChampDate v-model="filtres.du" title="Du" />
         <span>au</span>
-        <input v-model="filtres.au" type="date" title="Au" />
+        <ChampDate v-model="filtres.au" title="Au" />
       </div>
       <label class="case-a-cocher"><input v-model="filtres.avecAvance" type="checkbox" /> Avances disponibles</label>
       <span class="espace"></span>
@@ -85,7 +85,7 @@
           </div>
           <div>
             <label class="obligatoire">Date du paiement</label>
-            <input v-model="formulaire.datePaiement" type="date" :max="dateDuJour()" required />
+            <ChampDate v-model="formulaire.datePaiement" :max="dateDuJour()" obligatoire />
           </div>
           <div>
             <label class="obligatoire">Mode de paiement</label>
@@ -112,6 +112,14 @@
           <div class="entete-section">
             <h4 class="section">Répartition sur les factures non soldées</h4>
             <button v-if="formulaire.factures.length" type="button" class="bouton-lien" @click="repartir">Répartir automatiquement (plus anciennes d'abord)</button>
+            <ImportExportTableau
+              v-if="formulaire.factures.length"
+              titre="Factures non soldées"
+              :sous-titre="formulaire.centreNom || ''"
+              nom-fichier="factures_non_soldees"
+              :colonnes-pdf="COLONNES_REPARTITION"
+              :lignes="formulaire.factures"
+            />
           </div>
           <table v-if="formulaire.factures.length" class="tableau lignes">
             <thead>
@@ -160,7 +168,17 @@
         <div><span>Montant reçu</span><strong>{{ formaterMontant(detail.montant) }}</strong></div>
         <div><span>Avance restante</span><strong class="avance">{{ formaterMontant(detail.montantNonImpute) }}</strong></div>
       </div>
-      <h4 class="section">Factures réglées</h4>
+      <div class="titre-avec-export">
+        <h4 class="section">Factures réglées</h4>
+        <ImportExportTableau
+          v-if="detail.imputations.length"
+          :titre="`Factures réglées par le reçu ${detail.numero}`"
+          :sous-titre="detail.centre.nom"
+          :nom-fichier="`recu_${detail.numero}_factures`"
+          :colonnes-pdf="COLONNES_FACTURES_REGLEES"
+          :lignes="detail.imputations"
+        />
+      </div>
       <table v-if="detail.imputations.length" class="tableau lignes">
         <thead><tr><th>Facture</th><th>Date</th><th class="nombre">Montant facture</th><th class="nombre">Montant réglé</th></tr></thead>
         <tbody>
@@ -187,6 +205,7 @@
 </template>
 
 <script setup>
+import ChampDate from '@/components/ChampDate.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import FenetreModale from '@/components/FenetreModale.vue'
@@ -417,6 +436,22 @@ const sousTitrePdf = computed(() => {
     .filter(Boolean)
     .join(' — ')
 })
+// Export PDF / Excel des tableaux des fenêtres
+const COLONNES_REPARTITION = [
+  { titre: 'Facture', valeur: (f) => f.numero },
+  { titre: 'Objet', valeur: (f) => objetFacture(f) },
+  { titre: 'Échéance', valeur: (f) => (f.dateEcheance ? formaterDate(f.dateEcheance) : '—') },
+  { titre: 'Montant', valeur: (f) => formaterMontant(f.montantTotal), droite: true, somme: (f) => Number(f.montantTotal), formatTotal: formaterMontant },
+  { titre: 'Reste à payer', valeur: (f) => formaterMontant(f.solde), droite: true, somme: (f) => Number(f.solde), formatTotal: formaterMontant },
+  { titre: 'Montant réglé', valeur: (f) => formaterMontant(Number(f.impute) || 0), droite: true, somme: (f) => Number(f.impute) || 0, formatTotal: formaterMontant },
+]
+const COLONNES_FACTURES_REGLEES = [
+  { titre: 'Facture', valeur: (i) => i.facture.numero },
+  { titre: 'Date', valeur: (i) => formaterDate(i.facture.dateEmission) },
+  { titre: 'Montant facture', valeur: (i) => formaterMontant(i.facture.montantTotal), droite: true },
+  { titre: 'Montant réglé', valeur: (i) => formaterMontant(i.montant), droite: true, somme: (i) => Number(i.montant), formatTotal: formaterMontant },
+]
+
 const COLONNES_PDF = [
   { titre: 'N° reçu', valeur: (p) => p.numero },
   { titre: 'Date', valeur: (p) => formaterDate(p.datePaiement) },
@@ -435,7 +470,6 @@ onMounted(() => {
 
 <style scoped>
 .periode { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
-.periode input { width: 150px; }
 .case-a-cocher { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; white-space: nowrap; }
 .detail { display: block; font-size: 0.75rem; color: var(--muted); }
 .avance { color: #b35c00; }

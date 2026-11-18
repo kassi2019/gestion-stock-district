@@ -66,7 +66,7 @@
               <ColonneTri v-model="tri" cle="code">Code</ColonneTri>
               <ColonneTri v-model="tri" cle="designation">Désignation</ColonneTri>
               <ColonneTri v-model="tri" cle="famille">Famille</ColonneTri>
-              <ColonneTri v-model="tri" cle="uniteVente">Unité de vente</ColonneTri>
+              <ColonneTri v-model="tri" cle="uniteVente">Unité de comptage</ColonneTri>
               <ColonneTri v-model="tri" cle="prixVente" class="nombre">Prix de vente</ColonneTri>
               <ColonneTri v-model="tri" cle="prixAchat" class="nombre">Prix d'achat</ColonneTri>
               <ColonneTri v-model="tri" cle="marge" class="nombre">Marge</ColonneTri>
@@ -163,7 +163,7 @@
           </div>
           <div>
             <label class="obligatoire">À partir du</label>
-            <input v-model="nouveauPrixVente.dateEffet" type="date" required />
+            <ChampDate v-model="nouveauPrixVente.dateEffet" obligatoire />
           </div>
           <!-- Centre : seulement si les prix par centre sont activés -->
           <div v-if="prixParCentreActive">
@@ -181,6 +181,9 @@
         <TableauHistoriquePrix
           :lignes="historiqueVente"
           colonne="Centre"
+          titre-export="Historique des prix de vente"
+          :sous-titre-export="libelleMedicament"
+          :nom-fichier="`historique_prix_vente_${medicamentChoisi?.code || ''}`"
           :libelle="(p) => p.centre?.nom || 'Tous les centres'"
           @corriger="(ligne) => ouvrirCorrection('vente', ligne)"
         />
@@ -217,7 +220,7 @@
           </div>
           <div>
             <label class="obligatoire">À partir du</label>
-            <input v-model="nouveauPrixAchat.dateEffet" type="date" required />
+            <ChampDate v-model="nouveauPrixAchat.dateEffet" obligatoire />
           </div>
           <div>
             <label>Fournisseur (facultatif)</label>
@@ -234,6 +237,9 @@
         <TableauHistoriquePrix
           :lignes="historiqueAchat"
           colonne="Fournisseur"
+          titre-export="Historique des prix d'achat"
+          :sous-titre-export="libelleMedicament"
+          :nom-fichier="`historique_prix_achat_${medicamentChoisi?.code || ''}`"
           :libelle="(p) => p.fournisseur?.raisonSociale || 'Tous fournisseurs'"
           @corriger="(ligne) => ouvrirCorrection('achat', ligne)"
         />
@@ -278,6 +284,7 @@
 </template>
 
 <script setup>
+import ChampDate from '@/components/ChampDate.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import {
@@ -403,7 +410,7 @@ const COLONNES_PDF_LISTE = [
   { titre: 'Code', valeur: (m) => m.code },
   { titre: 'Désignation', valeur: (m) => m.designation },
   { titre: 'Famille', valeur: (m) => m.famille?.libelle },
-  { titre: 'Unité de vente', valeur: (m) => m.uniteVente?.libelle },
+  { titre: 'Unité de comptage', valeur: (m) => m.uniteVente?.libelle },
   { titre: 'Prix de vente', valeur: (m) => (m.prixVenteActuel !== null ? formaterMontant(m.prixVenteActuel) : 'Non défini'), droite: true, somme: (m) => m.prixVenteActuel, formatTotal: formaterMontant },
   { titre: "Prix d'achat", valeur: (m) => (m.prixAchatActuel !== null ? formaterMontant(m.prixAchatActuel) : 'Non défini'), droite: true, somme: (m) => m.prixAchatActuel, formatTotal: formaterMontant },
   { titre: 'Marge', valeur: (m) => (marge(m) !== null ? formaterMontant(marge(m)) : ''), droite: true, somme: (m) => marge(m), formatTotal: formaterMontant },

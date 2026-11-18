@@ -9,6 +9,8 @@
         2. aperçu des lignes lues (les lignes incomplètes sont signalées) ;
         3. import ligne par ligne, puis résumé (créés / modifiés / erreurs).
     - « PDF » : télécharge le tableau en PDF (voir src/utils/exportPdf.js).
+    - « Excel » : télécharge le même tableau en .xlsx (voir src/utils/exportExcel.js),
+                  avec les mêmes colonnes que le PDF (colonnes-pdf).
 
   Utilisation (exemple dans OngletFournisseurs.vue) :
 
@@ -38,13 +40,17 @@
 -->
 <template>
   <div class="import-export">
-    <button v-si-modif v-if="colonnesImport" class="bouton-outil" title="Importer des données depuis un fichier Excel ou CSV" @click="ouvrirImport">
+    <button type="button" v-si-modif v-if="colonnesImport" class="bouton-outil" title="Importer des données depuis un fichier Excel ou CSV" @click="ouvrirImport">
       <Icone nom="televerser" :taille="17" />
       Importer
     </button>
-    <button v-si-imprimer class="bouton-outil pdf" :disabled="exportEnCours" title="Télécharger le tableau en PDF" @click="telechargerPdf">
+    <button type="button" v-si-imprimer class="bouton-outil pdf" :disabled="exportEnCours" title="Télécharger le tableau en PDF" @click="telechargerPdf">
       <Icone nom="pdf" :taille="17" />
       {{ exportEnCours ? 'PDF…' : 'PDF' }}
+    </button>
+    <button type="button" v-si-imprimer class="bouton-outil excel" :disabled="exportExcelEnCours" title="Télécharger le tableau en Excel" @click="telechargerExcel">
+      <Icone nom="excel" :taille="17" />
+      {{ exportExcelEnCours ? 'Excel…' : 'Excel' }}
     </button>
 
     <!-- ===================== FENÊTRE D'IMPORT ===================== -->
@@ -195,6 +201,7 @@ import { useStore } from 'vuex'
 import Icone from '@/components/Icone.vue'
 import FenetreModale from '@/components/FenetreModale.vue'
 import { exporterPdf } from '@/utils/exportPdf'
+import { exporterExcel } from '@/utils/exportExcel'
 import { lireFichier, telechargerModele } from '@/utils/importFichier'
 
 const props = defineProps({
@@ -230,6 +237,30 @@ async function telechargerPdf() {
     store.dispatch('notifications/erreur', 'Impossible de créer le PDF.')
   } finally {
     exportEnCours.value = false
+  }
+}
+
+// ---------------------------------------------------------------------------
+// EXPORT EXCEL : mêmes colonnes et mêmes lignes que le PDF
+// (les colonnes de chiffres deviennent de vrais nombres, voir utils/exportExcel.js)
+// ---------------------------------------------------------------------------
+const exportExcelEnCours = ref(false)
+
+async function telechargerExcel() {
+  exportExcelEnCours.value = true
+  try {
+    await exporterExcel({
+      titre: props.titre,
+      sousTitre: props.sousTitre,
+      colonnes: props.colonnesPdf,
+      lignes: props.lignes,
+      nomFichier: props.nomFichier,
+    })
+  } catch (erreur) {
+    console.error(erreur)
+    store.dispatch('notifications/erreur', 'Impossible de créer le fichier Excel.')
+  } finally {
+    exportExcelEnCours.value = false
   }
 }
 
@@ -382,6 +413,9 @@ async function lancerImport() {
 /* Bouton PDF : rouge doux (couleur habituelle des PDF) */
 .bouton-outil.pdf { color: var(--danger); border-color: #f1b4b4; }
 .bouton-outil.pdf:hover { background: #fdecec; }
+/* Vert Excel */
+.bouton-outil.excel { color: #1d6f42; border-color: #a9d5bb; }
+.bouton-outil.excel:hover { background: #e8f5ee; }
 
 /* ---------- Étapes en haut de la fenêtre ---------- */
 .etapes {

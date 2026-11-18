@@ -165,7 +165,9 @@ export async function lireFichier(fichier, colonnes) {
   const titres = tableau[0].map(simplifier)
   const positions = {}
   for (const colonne of colonnes) {
-    const index = titres.findIndex((t) => t === simplifier(colonne.titre) || t === simplifier(colonne.cle))
+    // Titre actuel, clé technique, ou ancien titre (ex. « Unité de vente » devenu « Unité de comptage »)
+    const noms = [colonne.titre, colonne.cle, ...(colonne.anciensTitres || [])].map(simplifier)
+    const index = titres.findIndex((t) => noms.includes(t))
     if (index !== -1) positions[colonne.cle] = index
   }
 

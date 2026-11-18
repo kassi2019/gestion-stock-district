@@ -9,7 +9,7 @@
     - OngletFournisseurs.vue  fournisseurs
     - OngletFamilles.vue      familles de médicaments
     - OngletFormes.vue        formes de médicaments (comprimé, sirop...)
-    - OngletUnitesVente.vue   unités de vente (boîte, plaque, flacon...)
+    - OngletUnitesVente.vue   unités de comptage (boîte, plaquette, flacon...)
     - OngletFonctions.vue     fonctions du personnel (pharmacien, caissière...)
     - OngletMedicaments.vue   catalogue des médicaments
     - OngletPrix.vue          prix d'achat / de vente (avec historique)
@@ -93,7 +93,7 @@ const ONGLETS = [
   { code: 'fournisseurs', titre: 'Fournisseurs', icone: 'camion' },
   { code: 'familles', titre: 'Familles de médicaments', icone: 'presse-papier' },
   { code: 'formes', titre: 'Formes de médicaments', icone: 'gelule' },
-  { code: 'unites-vente', titre: 'Unités de vente', icone: 'carton' },
+  { code: 'unites-vente', titre: 'Unités de comptage', icone: 'carton' },
   { code: 'medicaments', titre: 'Médicaments', icone: 'carton' },
   { code: 'prix', titre: 'Prix', icone: 'portefeuille' },
   { code: 'fonctions', titre: 'Fonctions', icone: 'utilisateurs' },
@@ -138,7 +138,7 @@ const titresNombres = {
   fournisseurs: 'Nombre de fournisseurs (actifs et inactifs)',
   familles: 'Nombre de familles',
   formes: 'Nombre de formes',
-  'unites-vente': "Nombre d'unités de vente",
+  'unites-vente': "Nombre d'unités de comptage",
   fonctions: 'Nombre de fonctions du personnel',
   medicaments: 'Nombre de médicaments (actifs et inactifs)',
   prix: 'Médicaments qui ont un prix de vente',

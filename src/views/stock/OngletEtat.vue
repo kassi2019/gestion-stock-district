@@ -5,7 +5,15 @@
   Stock disponible par MÉDICAMENT (une ligne), et par LOT (clic sur la ligne
   pour dérouler : n° de lot, péremption, quantité). Valorisation au prix
   d'achat et au prix de vente actuels, état (rupture / sous le seuil /
-  normal). Bouton « Fiche » : fiche de stock du médicament (et PDF).
+  normal). Bouton « Fiche de stock » : fiche du médicament (et PDF).
+
+  Colonnes (retours de recette nov. 2026) :
+    Code | Désignation | Unité de comptage | Stock | Lot | CMM | Valeur d'achat | État | Action
+  - UNITÉ DE COMPTAGE : celle de la fiche médicament (comme à la réception).
+  - CMM (consommation moyenne mensuelle) : CALCULÉE par le serveur = sorties
+    vers les centres des 3 derniers mois complets / 3 (StockService.cmmDuDepot).
+    Elle sert de SEUIL : « sous le seuil » quand le stock <= CMM × niveau de
+    stock minimum en mois (1 par défaut). Plus de seuil saisi à la main ici.
   Filtres : recherche, famille, état, inactifs. Totaux, tri, pagination, PDF.
 
   Propriétés : etat (stock de tous les médicaments), delaiAlerte (jours)
@@ -50,13 +58,13 @@
             <th class="col-fleche"></th>
             <ColonneTri v-model="tri" cle="code">Code</ColonneTri>
             <ColonneTri v-model="tri" cle="designation">Désignation</ColonneTri>
-            <ColonneTri v-model="tri" cle="famille">Famille</ColonneTri>
+            <ColonneTri v-model="tri" cle="unite">Unité de comptage</ColonneTri>
             <ColonneTri v-model="tri" cle="stock" class="nombre">Stock</ColonneTri>
-            <ColonneTri v-model="tri" cle="seuil" class="nombre">Seuil</ColonneTri>
-            <ColonneTri v-model="tri" cle="lots" class="nombre">Lots</ColonneTri>
-            <ColonneTri v-model="tri" cle="valeurAchat" class="nombre">Valeur (achat)</ColonneTri>
+            <ColonneTri v-model="tri" cle="lots" class="nombre">Lot</ColonneTri>
+            <ColonneTri v-model="tri" cle="cmm" class="nombre" title="Consommation moyenne mensuelle">CMM</ColonneTri>
+            <ColonneTri v-model="tri" cle="valeurAchat" class="nombre">Valeur d'achat</ColonneTri>
             <ColonneTri v-model="tri" cle="etat">État</ColonneTri>
-            <th class="actions">Actions</th>
+            <th class="actions">Action</th>
           </tr>
         </thead>
         <tbody>
@@ -68,40 +76,23 @@
                 <strong>{{ m.designation }}</strong>
                 <div class="detail">{{ [m.forme?.libelle, m.dosage].filter(Boolean).join(' · ') }}</div>
               </td>
-              <td>{{ m.famille?.libelle || '—' }}</td>
+              <td>{{ m.uniteVente?.libelle || '—' }}</td>
               <td class="nombre">
                 <strong class="quantite" :class="etatMedicament(m).code.toLowerCase()">{{ formaterNombre(m.stock) }}</strong>
-                <div v-if="m.uniteVente" class="detail">{{ m.uniteVente.libelle.toLowerCase() }}</div>
-              </td>
-              <!-- Seuil d'alerte : modifiable directement (crayon ; Entrée = enregistrer, Échap = annuler) -->
-              <td class="nombre col-seuil" @click.stop>
-                <template v-if="seuilEnCours?.id === m.id">
-                  <input
-                    v-model.number="seuilEnCours.valeur"
-                    v-focus
-                    type="number"
-                    min="0"
-                    step="1"
-                    class="saisie-seuil"
-                    @keyup.enter="enregistrerSeuil"
-                    @keyup.esc="seuilEnCours = null"
-                  />
-                  <button class="bouton-lien" title="Enregistrer" @click="enregistrerSeuil">✓</button>
-                  <button class="bouton-lien" title="Annuler" @click="seuilEnCours = null">✕</button>
-                </template>
-                <template v-else>
-                  {{ m.seuilAlerte ? formaterNombre(m.seuilAlerte) : '—' }}
-                  <button v-si-modif class="bouton-lien crayon" title="Modifier le seuil d'alerte" @click="seuilEnCours = { id: m.id, valeur: m.seuilAlerte || 0 }">✎</button>
-                </template>
               </td>
               <td class="nombre">
                 {{ m.lots.filter((l) => l.lotId).length || '—' }}
                 <span v-if="alerteLots(m)" class="point-alerte" :title="alerteLots(m)">●</span>
               </td>
+              <!-- CMM calculée (sert de seuil d'alerte) -->
+              <td class="nombre" :title="`Moyenne des sorties vers les centres des ${m.moisCmm} derniers mois complets`">
+                {{ m.cmm ? formaterNombre(m.cmm) : '—' }}
+                <div v-if="m.seuilAlerte" class="detail">alerte ≤ {{ formaterNombre(m.seuilAlerte) }}</div>
+              </td>
               <td class="nombre">{{ m.valeurAchat !== null ? formaterMontant(m.valeurAchat) : '—' }}</td>
               <td><span class="badge" :class="etatMedicament(m).badge">{{ etatMedicament(m).libelle }}</span></td>
               <td class="actions" @click.stop>
-                <button class="bouton-lien" @click="ficheDe = m">Fiche</button>
+                <button class="bouton-lien" @click="ficheDe = m">Fiche de stock</button>
               </td>
             </tr>
             <!-- Détail par lot -->
@@ -155,7 +146,6 @@ import Pagination from '@/components/Pagination.vue'
 import ColonneTri from '@/components/ColonneTri.vue'
 import { utiliserTableau } from '@/utils/pagination'
 import { formaterDate, formaterMontant, formaterNombre } from '@/utils/format'
-import { modifierSeuil } from '@/api/stock'
 import FicheStock from './FicheStock.vue'
 import { etatMedicament, etatPeremption } from './stockCommun'
 
@@ -163,29 +153,7 @@ const props = defineProps({
   etat: { type: Array, required: true },
   delaiAlerte: { type: Number, default: 90 },
 })
-const emit = defineEmits(['modifie'])
 const store = useStore()
-
-// ---------------------------------------------------------------------------
-// SEUIL D'ALERTE (stock minimum au dépôt) : modification directe dans le tableau
-// ---------------------------------------------------------------------------
-const seuilEnCours = ref(null) // { id, valeur } du médicament en cours de modification
-/** Place le curseur dans la case du seuil dès qu'elle apparaît. */
-const vFocus = { mounted: (el) => el.select() }
-
-async function enregistrerSeuil() {
-  const { id, valeur } = seuilEnCours.value
-  const seuil = Number(valeur)
-  if (!Number.isInteger(seuil) || seuil < 0) return store.dispatch('notifications/erreur', "Le seuil doit être un nombre entier positif (0 = pas d'alerte).")
-  try {
-    const med = await modifierSeuil(id, seuil)
-    seuilEnCours.value = null
-    store.dispatch('notifications/succes', `Seuil d'alerte de « ${med.designation} » : ${formaterNombre(med.seuilAlerte)}.`)
-    emit('modifie') // recharge l'état (statut « sous le seuil », alertes)
-  } catch (erreur) {
-    store.dispatch('notifications/erreurApi', erreur)
-  }
-}
 
 const OPTIONS_ETAT = [
   { id: 'RUPTURE', libelle: 'En rupture' },
@@ -243,10 +211,10 @@ function toutDeplier(ouvrir) {
 const VALEURS_TRI = {
   code: (m) => m.code,
   designation: (m) => m.designation,
-  famille: (m) => m.famille?.libelle,
+  unite: (m) => m.uniteVente?.libelle,
   stock: (m) => m.stock,
-  seuil: (m) => m.seuilAlerte,
   lots: (m) => m.lots.length,
+  cmm: (m) => m.cmm,
   valeurAchat: (m) => m.valeurAchat,
   etat: (m) => ({ RUPTURE: 0, SOUS_SEUIL: 1, NORMAL: 2 })[etatMedicament(m).code],
 }
@@ -268,11 +236,11 @@ const sousTitrePdf = computed(() => {
 const COLONNES_PDF = [
   { titre: 'Code', valeur: (m) => m.code },
   { titre: 'Désignation', valeur: (m) => m.designation },
-  { titre: 'Famille', valeur: (m) => m.famille?.libelle },
-  { titre: 'Lots (péremption)', valeur: (m) => m.lots.filter((l) => l.numeroLot).map((l) => `${l.numeroLot} (${l.datePeremption ? formaterDate(l.datePeremption) : '?'}) : ${l.quantite}`).join(' ; ') },
+  { titre: 'Unité de comptage', valeur: (m) => m.uniteVente?.libelle },
   { titre: 'Stock', valeur: (m) => formaterNombre(m.stock), droite: true, somme: (m) => m.stock },
-  { titre: 'Seuil', valeur: (m) => formaterNombre(m.seuilAlerte), droite: true },
-  { titre: 'Valeur achat', valeur: (m) => (m.valeurAchat !== null ? formaterMontant(m.valeurAchat) : ''), droite: true, somme: (m) => m.valeurAchat, formatTotal: formaterMontant },
+  { titre: 'Lot (péremption)', valeur: (m) => m.lots.filter((l) => l.numeroLot).map((l) => `${l.numeroLot} (${l.datePeremption ? formaterDate(l.datePeremption) : '?'}) : ${l.quantite}`).join(' ; ') },
+  { titre: 'CMM', valeur: (m) => formaterNombre(m.cmm || 0), droite: true },
+  { titre: "Valeur d'achat", valeur: (m) => (m.valeurAchat !== null ? formaterMontant(m.valeurAchat) : ''), droite: true, somme: (m) => m.valeurAchat, formatTotal: formaterMontant },
   { titre: 'Valeur vente', valeur: (m) => (m.valeurVente !== null ? formaterMontant(m.valeurVente) : ''), droite: true, somme: (m) => m.valeurVente, formatTotal: formaterMontant },
   { titre: 'État', valeur: (m) => etatMedicament(m).libelle },
 ]
@@ -281,10 +249,6 @@ onMounted(() => store.dispatch('referentiel/charger', { liste: 'familles' }).cat
 </script>
 
 <style scoped>
-.col-seuil { white-space: nowrap; }
-.col-seuil .crayon { margin-left: 0.25rem; opacity: 0.45; }
-.col-seuil:hover .crayon { opacity: 1; }
-.saisie-seuil { width: 80px; padding: 0.2rem 0.4rem; text-align: right; }
 .detail { font-size: 0.75rem; color: var(--muted); }
 .totaux { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem; margin-bottom: 1rem; }
 .total-case { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.7rem 0.9rem; border-radius: 12px; background: var(--fond-pale); font-size: 0.78rem; color: var(--muted); }

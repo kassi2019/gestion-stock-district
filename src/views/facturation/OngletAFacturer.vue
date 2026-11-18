@@ -25,9 +25,10 @@
         <ListeDeroulante v-model="centreId" :options="centres" champ-libelle="nom" placeholder="Tous les centres" />
       </div>
       <span class="espace"></span>
+      <ImportExportTableau titre="Anciens rapports à facturer" :sous-titre="sousTitreExport" nom-fichier="rapports_a_facturer" :colonnes-pdf="COLONNES_EXPORT" :lignes="rapportsAffiches" />
       <label class="date-emission">
         Date d'émission
-        <input v-model="dateEmission" type="date" :max="dateDuJour()" />
+        <ChampDate v-model="dateEmission" :max="dateDuJour()" />
       </label>
       <button v-si-modif :disabled="selection.size === 0 || enregistrement" @click="generer">
         Facturer {{ selection.size || '' }} ancien(s) rapport(s){{ selection.size ? ` — ${formaterMontant(montantSelection)}` : '' }}
@@ -74,13 +75,25 @@
 </template>
 
 <script setup>
+import ChampDate from '@/components/ChampDate.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useStore } from 'vuex'
 import ListeDeroulante from '@/components/ListeDeroulante.vue'
+import ImportExportTableau from '@/components/ImportExportTableau.vue'
 import { confirmer } from '@/utils/alertes'
 import { dateDuJour, formaterDate, formaterMontant } from '@/utils/format'
 import { genererFactures, rapportsAFacturer } from '@/api/facturation'
 import { periodeRapport } from './financesCommun'
+
+// Export PDF / Excel des rapports affichés
+const COLONNES_EXPORT = [
+  { titre: 'N° rapport', valeur: (r) => r.numero },
+  { titre: 'Période', valeur: (r) => periodeRapport(r) },
+  { titre: 'Centre', valeur: (r) => r.centre.nom },
+  { titre: 'Lignes', valeur: (r) => r._count?.lignes ?? 0, droite: true },
+  { titre: 'Validé le', valeur: (r) => (r.dateValidation ? formaterDate(r.dateValidation) : '—') },
+  { titre: 'Montant', valeur: (r) => formaterMontant(r.montantTotal), droite: true, somme: (r) => Number(r.montantTotal), formatTotal: formaterMontant },
+]
 
 const emit = defineEmits(['generees'])
 const store = useStore()
@@ -93,6 +106,10 @@ const dateEmission = ref(dateDuJour())
 const selection = ref(new Set())
 
 const centres = computed(() => store.state.referentiel.centres)
+const sousTitreExport = computed(() => {
+  const c = centres.value.find((x) => x.id === centreId.value)
+  return c ? `Centre : ${c.nom}` : 'Tous les centres'
+})
 const rapportsAffiches = computed(() => rapports.value.filter((r) => !centreId.value || r.centreId === centreId.value))
 const toutCoche = computed(() => rapportsAffiches.value.length > 0 && rapportsAffiches.value.every((r) => selection.value.has(r.id)))
 const montantSelection = computed(() => rapports.value.filter((r) => selection.value.has(r.id)).reduce((t, r) => t + Number(r.montantTotal), 0))

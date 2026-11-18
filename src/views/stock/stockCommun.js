@@ -40,7 +40,11 @@ export const TYPES_MANUELS = Object.entries(TYPES_MOUVEMENT)
 /** Liste { id, libelle } de tous les types (filtre). */
 export const OPTIONS_TYPES = Object.entries(TYPES_MOUVEMENT).map(([id, t]) => ({ id, libelle: t.libelle }))
 
-/** État d'un médicament selon son stock et son seuil d'alerte. */
+/**
+ * État d'un médicament selon son stock et son seuil d'alerte.
+ * seuilAlerte est CALCULÉ par le serveur à partir de la CMM
+ * (CMM × niveau de stock minimum en mois) : voir StockService.etat().
+ */
 export function etatMedicament(m) {
   if (m.stock <= 0) return { code: 'RUPTURE', libelle: 'Rupture', badge: 'badge-rouge' }
   if (m.seuilAlerte > 0 && m.stock <= m.seuilAlerte) return { code: 'SOUS_SEUIL', libelle: 'Sous le seuil', badge: 'badge-orange' }
@@ -92,7 +96,8 @@ export function ficheStockPdf(fiche, du, au) {
           ['Désignation', m.designation],
           ['Forme / dosage', [m.forme?.libelle, m.dosage].filter(Boolean).join(' · ')],
           ['Famille', m.famille?.libelle],
-          ['Unité de vente', m.uniteVente?.libelle],
+          ['Unité de comptage', m.uniteVente?.libelle],
+          ['CMM', formaterNombre(m.cmm || 0)],
           ['Seuil d\'alerte', formaterNombre(m.seuilAlerte)],
         ],
       },

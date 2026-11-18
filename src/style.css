@@ -85,6 +85,9 @@ label { display: block; font-size: 0.875rem; margin-bottom: 0.25rem; color: var(
 }
 .barre-outils .recherche { flex: 1; min-width: 220px; max-width: 380px; }
 .barre-outils .espace { flex: 1; }
+
+/* Titre de section (h4) avec les boutons PDF / Excel à droite (ImportExportTableau) */
+.titre-avec-export { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .barre-outils select { width: auto; min-width: 180px; }
 
 /* --- Boutons --- */

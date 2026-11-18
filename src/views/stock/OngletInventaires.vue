@@ -29,6 +29,14 @@
     <div class="barre-outils">
       <input v-model="recherche" class="recherche" type="search" placeholder="Rechercher un médicament…" />
       <span class="espace"></span>
+      <!-- Export de la feuille de comptage : tous les lots affichés (filtres appliqués) -->
+      <ImportExportTableau
+        titre="Inventaire du dépôt — feuille de comptage"
+        :sous-titre="`Au ${formaterDate(dateDuJour())}`"
+        nom-fichier="inventaire_depot"
+        :colonnes-pdf="COLONNES_EXPORT"
+        :lignes="lignesExport"
+      />
       <button v-si-modif class="bouton-valider-tout" :disabled="nbSaisies === 0 || enregistrement" @click="validerTout">
         ✅ Valider tout l'inventaire ({{ nbSaisies }})
       </button>
@@ -138,13 +146,12 @@
               </td>
               <td>
                 <template v-if="l.lotId && corrections[l.stockId]">
-                  <input
+                  <ChampDate
                     v-model="corrections[l.stockId].datePeremption"
-                    type="date"
-                    class="inventaire-input inventaire-peremption"
+                    class="inventaire-date"
                     :class="{ modifie: corrections[l.stockId].datePeremption !== jourIso(l.datePeremption) }"
                     :title="`Péremption enregistrée : ${l.datePeremption ? formaterDate(l.datePeremption) : '—'}`"
-                    :disabled="!peutModifier"
+                    :desactive="!peutModifier"
                   />
                   <span v-if="etatPeremption(l.datePeremption, delaiAlerte)?.code !== 'NORMAL' && l.datePeremption" class="badge peremption" :class="etatPeremption(l.datePeremption, delaiAlerte).badge">
                     {{ etatPeremption(l.datePeremption, delaiAlerte).libelle }}
@@ -244,7 +251,7 @@
         </div>
         <div>
           <label class="obligatoire">Date de péremption</label>
-          <input v-model="ajoutLot.datePeremption" type="date" required />
+          <ChampDate v-model="ajoutLot.datePeremption" obligatoire />
         </div>
       </form>
       <template #pied>
@@ -258,9 +265,18 @@
     <!-- ===================== FICHE D'INVENTAIRE ===================== -->
     <FenetreModale v-if="fiche" titre="🖨️ Fiche d'inventaire" tres-large @fermer="fiche = null">
       <div class="barre-outils">
-        <label class="fiche-date">Du <input v-model="fiche.du" type="date" @change="chargerFiche" /></label>
-        <label class="fiche-date">au <input v-model="fiche.au" type="date" @change="chargerFiche" /></label>
+        <label class="fiche-date">Du <ChampDate v-model="fiche.du" @change="chargerFiche" /></label>
+        <label class="fiche-date">au <ChampDate v-model="fiche.au" @change="chargerFiche" /></label>
         <button type="button" class="bouton-secondaire petit" @click="chargerFiche">🔄 Actualiser</button>
+        <span class="espace"></span>
+        <ImportExportTableau
+          v-if="fiche.donnees && fiche.donnees.lignes.length"
+          titre="Fiche d'inventaire"
+          :sous-titre="`Du ${formaterDate(fiche.du)} au ${formaterDate(fiche.au)}`"
+          nom-fichier="fiche_inventaire"
+          :colonnes-pdf="COLONNES_FICHE"
+          :lignes="fiche.donnees.lignes"
+        />
       </div>
       <p v-if="fiche.chargement" class="tableau-vide">Chargement…</p>
       <p v-else-if="!fiche.donnees || fiche.donnees.lignes.length === 0" class="tableau-vide">
@@ -313,11 +329,13 @@
 </template>
 
 <script setup>
+import ChampDate from '@/components/ChampDate.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import FenetreModale from '@/components/FenetreModale.vue'
 import ListeDeroulante from '@/components/ListeDeroulante.vue'
 import Pagination from '@/components/Pagination.vue'
+import ImportExportTableau from '@/components/ImportExportTableau.vue'
 import { utiliserPagination } from '@/utils/pagination'
 import { confirmer } from '@/utils/alertes'
 import { dateDuJour, formaterDate, formaterMontant, formaterNombre } from '@/utils/format'
@@ -626,6 +644,32 @@ async function confirmerAjoutLot() {
 // ---------------------------------------------------------------------------
 const fiche = ref(null)
 
+// ---------------------------------------------------------------------------
+// EXPORT PDF / EXCEL
+// ---------------------------------------------------------------------------
+/** Feuille de comptage : une ligne par lot affiché (toutes les pages). */
+const lignesExport = computed(() => produits.value.flatMap(({ m, lignes }) => lignes.map((l) => ({ m, l }))))
+const COLONNES_EXPORT = [
+  { titre: 'Code', valeur: ({ m }) => m.code },
+  { titre: 'Médicament', valeur: ({ m }) => [m.designation, m.dosage].filter(Boolean).join(' ') },
+  { titre: 'Lot', valeur: ({ l }) => (l.lotId ? l.numeroLot : 'Sans lot') },
+  { titre: 'Péremption', valeur: ({ l }) => (l.datePeremption ? formaterDate(l.datePeremption) : '—') },
+  { titre: 'Stock actuel', valeur: ({ l }) => formaterNombre(l.quantite), droite: true },
+  { titre: 'Stock compté', valeur: ({ l }) => (estCompte(l) ? formaterNombre(saisies[l.stockId]) : ''), droite: true },
+  { titre: 'Écart', valeur: ({ l }) => (estCompte(l) ? String(ecart(l)) : ''), droite: true },
+]
+/** Fiche d'inventaire : lots comptés sur la période. */
+const COLONNES_FICHE = [
+  { titre: 'Médicament', valeur: (l) => `${l.medicament} (${l.code})` },
+  { titre: 'Lot', valeur: (l) => l.lot },
+  { titre: 'Péremption', valeur: (l) => (l.peremption ? formaterDate(l.peremption) : '—') },
+  { titre: 'Stock théorique', valeur: (l) => l.stockAvant ?? '—', droite: true },
+  { titre: 'Stock compté', valeur: (l) => l.stockApres ?? '—', droite: true },
+  { titre: 'Écart', valeur: (l) => String(l.ecart), droite: true },
+  { titre: "Valeur de l'écart", valeur: (l) => formaterMontant(l.valeurEcart), droite: true, somme: (l) => Number(l.valeurEcart) || 0, formatTotal: formaterMontant },
+  { titre: 'Compté par', valeur: (l) => l.par },
+]
+
 function ouvrirFiche() {
   fiche.value = { du: dateDuJour(), au: dateDuJour(), donnees: null, chargement: false }
   chargerFiche()
@@ -726,8 +770,9 @@ async function chargerFiche() {
 .inventaire-lots tr.lot-compte td { background: #f3fbf6; }
 .inventaire-input { width: 90px; padding: 0.3rem 0.5rem; border: 1.5px solid #c8d3cd; border-radius: 6px; }
 .inventaire-lot { width: 130px; }
-.inventaire-peremption { width: 150px; }
 .inventaire-input.modifie { border-color: #d97706; background: #fffbeb; }
+/* Péremption (3 cases jour / mois / année) : même repère orange quand elle est corrigée */
+.inventaire-date.modifie :deep(input) { border-color: #d97706; background: #fffbeb; }
 .sans-lot { font-style: italic; color: var(--muted); }
 .badge.peremption { margin-left: 0.35rem; }
 .actions { text-align: right; white-space: nowrap; }
@@ -744,7 +789,6 @@ async function chargerFiche() {
 
 /* ---------- Fiche d'inventaire ---------- */
 .fiche-date { display: flex; align-items: center; gap: 0.35rem; margin: 0; font-size: 0.85rem; color: var(--muted); }
-.fiche-date input { width: 160px; }
 .fiche-resume {
   display: flex;
   flex-wrap: wrap;

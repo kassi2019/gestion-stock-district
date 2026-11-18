@@ -131,7 +131,16 @@
         </div>
 
         <!-- ---------- Droits par module ---------- -->
-        <h4 class="section pleine-largeur">Droits par module</h4>
+        <div class="titre-avec-export pleine-largeur">
+          <h4 class="section">Droits par module</h4>
+          <ImportExportTableau
+            v-if="formulaire.code !== 'ADMIN'"
+            :titre="`Droits du profil ${formulaire.libelle || formulaire.code || ''}`"
+            :nom-fichier="`droits_${formulaire.code || 'profil'}`"
+            :colonnes-pdf="COLONNES_DROITS"
+            :lignes="MODULES"
+          />
+        </div>
         <p v-if="formulaire.code === 'ADMIN'" class="pleine-largeur info-lecture">
           L'administrateur a toujours tous les droits (voir, imprimer, modifier) sur tous les modules. Ses droits ne sont pas modifiables.
         </p>
@@ -324,6 +333,15 @@ const VALEURS_TRI = {
 const { tri, lignesTriees, page, taille, lignesPage } = utiliserTableau(profilsAffiches, [recherche], VALEURS_TRI)
 
 /** PDF : un profil par ligne, ses modules en lecture et en modification. */
+// Export PDF / Excel de la grille des droits du profil ouvert (Oui / vide)
+const COLONNES_DROITS = [
+  { titre: 'Module', valeur: (m) => m.titre },
+  ...DROITS.map((droit) => ({
+    titre: LIBELLES_DROITS[droit],
+    valeur: (m) => (formulaire.value?.droits[m.code]?.includes(droit) ? 'Oui' : ''),
+  })),
+]
+
 const COLONNES_PDF = [
   { titre: 'Code', valeur: (p) => p.code },
   { titre: 'Profil', valeur: (p) => p.libelle },

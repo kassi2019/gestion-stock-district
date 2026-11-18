@@ -1,9 +1,13 @@
 <!--
   =============================================================================
-  ONGLET « UNITÉS DE VENTE »
+  ONGLET « UNITÉS DE COMPTAGE » (anciennement « unités de vente »)
   =============================================================================
-  Liste des unités dans lesquelles un médicament est vendu (Boîte, Plaque,
-  Flacon...). Le prix de vente d'un médicament s'applique à son unité de vente.
+  Liste des unités dans lesquelles un médicament est compté (Boîte, Plaquette,
+  Comprimé, Flacon...). C'est l'unité du STOCK, des quantités reçues / livrées
+  et des prix (achat et vente) de ce médicament. Elle est affichée dans la
+  colonne « Unité de comptage » de la réception fournisseur.
+  ⚠ Dans le code et la base, le nom technique reste « UniteVente » /
+    « unites_vente » (seul le libellé affiché a changé, nov. 2026).
   Ces unités apparaissent dans la liste déroulante du formulaire des médicaments.
   Une unité peut être supprimée seulement si aucun médicament ne l'utilise
   (le bouton "Supprimer" est alors grisé).
@@ -17,7 +21,7 @@
       <span class="espace"></span>
       <!-- Boutons « Importer » (fichier Excel/CSV) et « PDF » -->
       <ImportExportTableau
-        titre="Unités de vente"
+        titre="Unités de comptage"
         nom-fichier="unites_vente"
         :colonnes-pdf="COLONNES_PDF"
         :lignes="lignesTriees"
@@ -62,14 +66,14 @@
       <!-- Pagination (la recherche et les filtres s'appliquent à TOUTES les lignes) -->
       <Pagination v-model:page="page" v-model:taille="taille" :total="unitesAffichees.length" />
       <p v-if="!chargement && unitesAffichees.length === 0" class="tableau-vide">
-        Aucune unité de vente. Cliquez sur « Nouvelle unité » pour en ajouter une.
+        Aucune unité de comptage. Cliquez sur « Nouvelle unité » pour en ajouter une.
       </p>
       <p v-if="chargement" class="tableau-vide">Chargement…</p>
     </div>
 
     <FenetreModale
       v-if="formulaire"
-      :titre="formulaire.id ? 'Modifier l\'unité de vente' : 'Nouvelle unité de vente'"
+      :titre="formulaire.id ? 'Modifier l\'unité de comptage' : 'Nouvelle unité de comptage'"
       @fermer="formulaire = null"
     >
       <form id="form-unite-vente" class="grille-formulaire" @submit.prevent="enregistrer">
@@ -140,7 +144,7 @@ async function enregistrer() {
   try {
     const { id, code, libelle } = formulaire.value
     await store.dispatch('referentiel/enregistrer', { liste: 'unitesVente', element: { id, code, libelle } })
-    store.dispatch('notifications/succes', id ? 'Unité de vente modifiée.' : 'Unité de vente créée.')
+    store.dispatch('notifications/succes', id ? 'Unité de comptage modifiée.' : 'Unité de comptage créée.')
     // La fenêtre RESTE OUVERTE (c'est l'utilisateur qui la ferme : × ou Fermer)
     // et les champs sont VIDÉS, prêts pour une nouvelle saisie.
     ouvrirFormulaire()
@@ -154,7 +158,7 @@ async function enregistrer() {
 
 async function supprimer(unite) {
   const confirme = await confirmer({
-    titre: 'Supprimer cette unité de vente ?',
+    titre: 'Supprimer cette unité de comptage ?',
     texte: `« ${unite.libelle} » sera supprimée définitivement.`,
     boutonConfirmer: 'Oui, supprimer',
     danger: true,
@@ -162,7 +166,7 @@ async function supprimer(unite) {
   if (!confirme) return
   try {
     await store.dispatch('referentiel/supprimer', { liste: 'unitesVente', element: unite })
-    store.dispatch('notifications/succes', 'Unité de vente supprimée.')
+    store.dispatch('notifications/succes', 'Unité de comptage supprimée.')
     await charger()
   } catch (erreur) {
     store.dispatch('notifications/erreurApi', erreur)

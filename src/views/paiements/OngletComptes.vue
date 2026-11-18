@@ -67,11 +67,18 @@
       <div class="barre-outils">
         <div class="periode">
           <span>Du</span>
-          <input v-model="periode.du" type="date" @change="chargerReleve" />
+          <ChampDate v-model="periode.du" @change="chargerReleve" />
           <span>au</span>
-          <input v-model="periode.au" type="date" :max="dateDuJour()" @change="chargerReleve" />
+          <ChampDate v-model="periode.au" :max="dateDuJour()" @change="chargerReleve" />
         </div>
         <span class="espace"></span>
+        <ImportExportTableau
+          :titre="`Relevé de compte — ${releve.centre.nom}`"
+          :sous-titre="`Du ${formaterDate(periode.du)} au ${formaterDate(periode.au)}`"
+          :nom-fichier="`releve_${releve.centre.code || releve.centre.id}`"
+          :colonnes-pdf="COLONNES_RELEVE"
+          :lignes="lignesReleve"
+        />
         <button v-si-imprimer class="bouton-secondaire" @click="relevePdf(releve)">Relevé (PDF)</button>
       </div>
 
@@ -121,6 +128,7 @@
 </template>
 
 <script setup>
+import ChampDate from '@/components/ChampDate.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useStore } from 'vuex'
 import FenetreModale from '@/components/FenetreModale.vue'
@@ -186,6 +194,25 @@ const VALEURS_TRI = {
 }
 const { tri, lignesTriees, page, taille, lignesPage } = utiliserTableau(situationsAffichees, [recherche, avecSoldeSeulement], VALEURS_TRI)
 
+// Export PDF / Excel du relevé : solde de début, opérations, puis totaux
+const lignesReleve = computed(() => {
+  const r = releve.value
+  if (!r) return []
+  return [
+    { libelle: 'Solde au début de la période', solde: r.soldeInitial, special: true },
+    ...r.lignes,
+    { libelle: 'TOTAUX DE LA PÉRIODE', debit: r.totalDebit, credit: r.totalCredit, solde: r.soldeFinal, special: true },
+  ]
+})
+const COLONNES_RELEVE = [
+  { titre: 'Date', valeur: (l) => (l.special ? '' : formaterDate(l.date)) },
+  { titre: 'N° pièce', valeur: (l) => l.numero || '' },
+  { titre: 'Libellé', valeur: (l) => l.libelle },
+  { titre: 'Débit', valeur: (l) => (l.debit ? formaterMontant(l.debit) : ''), droite: true },
+  { titre: 'Crédit', valeur: (l) => (l.credit ? formaterMontant(l.credit) : ''), droite: true },
+  { titre: 'Solde', valeur: (l) => formaterMontant(l.solde), droite: true },
+]
+
 const COLONNES_PDF = [
   { titre: 'Centre', valeur: (s) => s.centre.nom },
   { titre: 'Facturé', valeur: (s) => formaterMontant(s.totalFacture), droite: true, somme: (s) => s.totalFacture, formatTotal: formaterMontant },
@@ -202,7 +229,6 @@ defineExpose({ charger })
 <style scoped>
 .case-a-cocher { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; white-space: nowrap; }
 .periode { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--muted); }
-.periode input { width: 150px; }
 .totaux { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; margin: 0.5rem 0 1rem; }
 .total-case { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.75rem 1rem; border-radius: 12px; background: var(--primary-light); }
 .total-case span { font-size: 0.8rem; color: var(--muted); }

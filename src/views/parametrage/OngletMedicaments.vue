@@ -147,7 +147,7 @@
         <!-- ---------- Vente ---------- -->
         <h4 class="section pleine-largeur">Vente</h4>
         <div>
-          <label class="obligatoire">Unité de vente</label>
+          <label class="obligatoire">Unité de comptage</label>
           <ListeDeroulante v-model="formulaire.uniteVenteId" :options="unitesVente" placeholder="Boîte" />
           <small class="aide">Le prix de vente s'applique à cette unité.</small>
         </div>
@@ -188,7 +188,7 @@
             </div>
             <div>
               <label>Date de péremption</label>
-              <input v-model="formulaire.datePeremption" type="date" />
+              <ChampDate v-model="formulaire.datePeremption" />
             </div>
           </template>
         </template>
@@ -211,6 +211,7 @@
 </template>
 
 <script setup>
+import ChampDate from '@/components/ChampDate.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useStore } from 'vuex'
 import FenetreModale from '@/components/FenetreModale.vue'
@@ -394,7 +395,7 @@ const COLONNES_PDF = [
   { titre: 'Unité', valeur: (m) => m.unite },
   { titre: 'Famille', valeur: (m) => m.famille?.libelle },
   { titre: 'Seuil', valeur: (m) => formaterNombre(m.seuilAlerte), droite: true },
-  { titre: 'Unité de vente', valeur: (m) => libelleUniteVente(m.uniteVenteId) },
+  { titre: 'Unité de comptage', valeur: (m) => libelleUniteVente(m.uniteVenteId) },
   {
     titre: 'Prix de vente',
     valeur: (m) => (m.prixVenteActuel !== null ? formaterMontant(m.prixVenteActuel) : 'Non défini'),
@@ -417,13 +418,13 @@ const COLONNES_IMPORT = [
   { cle: 'designation', titre: 'Désignation', obligatoire: true, exemple: 'Paracétamol 500 mg' },
   { cle: 'dosage', titre: 'Dosage', exemple: '500 mg' },
   // --- Vente ---
-  { cle: 'uniteVente', titre: 'Unité de vente', exemple: 'Boîte', aide: "Code ou libellé de l'unité (créée automatiquement si elle n'existe pas). Boîte si vide. Le prix de vente s'applique à cette unité" },
-  { cle: 'prixVente', titre: 'Prix de vente', exemple: 500, aide: "En FCFA, par unité de vente. S'il change, un nouveau prix est créé à la date du jour" },
-  { cle: 'prixAchat', titre: "Prix d'achat", exemple: 350, aide: "En FCFA, par unité de vente, payé au fournisseur. S'il change, un nouveau prix est créé à la date du jour" },
+  { cle: 'uniteVente', titre: 'Unité de comptage', anciensTitres: ['Unité de vente'], exemple: 'Boîte', aide: "Code ou libellé de l'unité (créée automatiquement si elle n'existe pas). Boîte si vide. Le prix de vente s'applique à cette unité" },
+  { cle: 'prixVente', titre: 'Prix de vente', exemple: 500, aide: "En FCFA, par unité de comptage. S'il change, un nouveau prix est créé à la date du jour" },
+  { cle: 'prixAchat', titre: "Prix d'achat", exemple: 350, aide: "En FCFA, par unité de comptage, payé au fournisseur. S'il change, un nouveau prix est créé à la date du jour" },
   { cle: 'fournisseur', titre: 'Fournisseur', exemple: 'NPSP', aide: "Code ou raison sociale du fournisseur du prix d'achat (créé automatiquement s'il n'existe pas). Vide = prix d'achat pour tous les fournisseurs" },
   { cle: 'consommable', titre: 'Consommable', exemple: 'Non', aide: "Oui ou Non (coton, alcool… : pas facturé en caisse pharmacie). Non si vide" },
   // --- Stock ---
-  { cle: 'seuilAlerte', titre: "Seuil d'alerte", exemple: 50, aide: "Stock minimum au dépôt (par unité de vente) : en dessous, alerte « sous le seuil ». Vide = inchangé (0 pour un nouveau médicament)" },
+  { cle: 'seuilAlerte', titre: "Seuil d'alerte", exemple: 50, aide: "Stock minimum au dépôt (par unité de comptage) : en dessous, alerte « sous le seuil ». Vide = inchangé (0 pour un nouveau médicament)" },
   // --- Stock initial (seulement pour un NOUVEAU médicament) ---
   { cle: 'stockInitial', titre: 'Stock initial', exemple: 200, aide: 'Seulement pour un nouveau médicament (ignoré si le code existe déjà)' },
   { cle: 'numeroLot', titre: 'N° de lot', exemple: 'LOT2026-01', aide: 'Obligatoire si un stock initial est indiqué' },

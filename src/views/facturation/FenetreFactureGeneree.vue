@@ -50,6 +50,15 @@
         {{ libellePeriode(proposition.rapport.annee, proposition.rapport.mois) }}.
         Facture datée du <strong>{{ formaterDate(proposition.dateEmission) }}</strong>.
       </div>
+      <div v-if="proposition.lignes.length" class="barre-export">
+        <ImportExportTableau
+          :titre="`Proposition de facture — ${proposition.rapport.centre.nom}`"
+          :sous-titre="`Rapport ${proposition.rapport.numero} — ${libellePeriode(proposition.rapport.annee, proposition.rapport.mois)}`"
+          :nom-fichier="`proposition_facture_${proposition.rapport.numero}`"
+          :colonnes-pdf="COLONNES_EXPORT"
+          :lignes="proposition.lignes"
+        />
+      </div>
       <table v-if="proposition.lignes.length" class="tableau lignes">
         <thead>
           <tr>
@@ -127,6 +136,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useStore } from 'vuex'
 import FenetreModale from '@/components/FenetreModale.vue'
 import ListeDeroulante from '@/components/ListeDeroulante.vue'
+import ImportExportTableau from '@/components/ImportExportTableau.vue'
 import { confirmer } from '@/utils/alertes'
 import { formaterDate, formaterMontant, formaterNombre } from '@/utils/format'
 import { creerFactureGeneree, propositionFactureGeneree, trouverFacture } from '@/api/facturation'
@@ -143,6 +153,21 @@ const choix = reactive({ centreId: null, annee: precedent.getFullYear(), mois: p
 const optionsMois = MOIS.map((libelle, i) => ({ id: i + 1, libelle }))
 
 const proposition = ref(null)
+
+/** Export PDF / Excel de la proposition (quantités accordées telles que saisies). */
+const COLONNES_EXPORT = [
+  { titre: 'Code', valeur: (l) => l.medicament?.code || '' },
+  { titre: 'Produit', valeur: (l) => l.medicament?.designation || '' },
+  { titre: 'Unité', valeur: (l) => l.medicament?.uniteVente?.libelle || l.medicament?.unite || '' },
+  { titre: 'Stock centre', valeur: (l) => formaterNombre(l.stockDisponibleCentre), droite: true },
+  { titre: 'CMM', valeur: (l) => formaterNombre(l.cmm), droite: true },
+  { titre: 'À commander', valeur: (l) => formaterNombre(l.quantiteACommander), droite: true },
+  { titre: 'Stock district', valeur: (l) => formaterNombre(l.stockDistrict), droite: true },
+  { titre: 'Quantité accordée', valeur: (l) => formaterNombre(Number(l.quantite) || 0), droite: true, somme: (l) => Number(l.quantite) || 0 },
+  { titre: 'Prix de vente', valeur: (l) => (l.prixVente === null ? 'Prix non défini' : formaterMontant(l.prixVente)), droite: true },
+  { titre: 'Montant', valeur: (l) => formaterMontant((Number(l.quantite) || 0) * (l.prixVente || 0)), droite: true,
+    somme: (l) => (Number(l.quantite) || 0) * (l.prixVente || 0), formatTotal: formaterMontant },
+]
 const chargement = ref(false)
 const enregistrement = ref(false)
 
@@ -229,4 +254,6 @@ onMounted(() => {
 .petit { font-size: 0.8rem; }
 .champ-erreur { border-color: var(--danger); }
 @media (max-width: 900px) { .choix { grid-template-columns: 1fr 1fr; } }
+/* Boutons PDF / Excel au-dessus du tableau, à droite */
+.barre-export { display: flex; justify-content: flex-end; margin-bottom: 8px; }
 </style>

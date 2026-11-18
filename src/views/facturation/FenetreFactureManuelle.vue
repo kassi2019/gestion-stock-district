@@ -32,11 +32,14 @@
       </div>
       <div>
         <label class="obligatoire">Date de la facture</label>
-        <input v-model="formulaire.dateEmission" type="date" :max="dateDuJour()" required @change="actualiser" />
+        <ChampDate v-model="formulaire.dateEmission" :max="dateDuJour()" obligatoire @change="actualiser" />
       </div>
 
       <div class="pleine-largeur">
-        <h4 class="section">Produits livrés</h4>
+        <div class="titre-avec-export">
+          <h4 class="section">Produits livrés</h4>
+          <ImportExportTableau titre="Facture manuelle — produits livrés" :sous-titre="sousTitreExport" nom-fichier="facture_manuelle" :colonnes-pdf="COLONNES_EXPORT" :lignes="lignesExport" />
+        </div>
         <table class="tableau lignes">
           <thead>
             <tr>
@@ -114,10 +117,12 @@
 </template>
 
 <script setup>
+import ChampDate from '@/components/ChampDate.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useStore } from 'vuex'
 import FenetreModale from '@/components/FenetreModale.vue'
 import ListeDeroulante from '@/components/ListeDeroulante.vue'
+import ImportExportTableau from '@/components/ImportExportTableau.vue'
 import { confirmer } from '@/utils/alertes'
 import { dateDuJour, formaterMontant, formaterNombre } from '@/utils/format'
 import { creerFactureManuelle, infosSortie } from '@/api/facturation'
@@ -130,6 +135,24 @@ const nouvelleLigne = () => ({ cle: ++compteur, medicamentId: null, quantite: 1 
 const formulaire = reactive({ centreId: null, dateEmission: dateDuJour(), lignes: [nouvelleLigne()] })
 const infos = ref({}) // { medicamentId: { stock, prixVente } }
 const enregistrement = ref(false)
+
+// ---------------------------------------------------------------------------
+// EXPORT PDF / EXCEL des lignes saisies (lignes avec un produit choisi)
+// ---------------------------------------------------------------------------
+const lignesExport = computed(() => formulaire.lignes.filter((l) => l.medicamentId))
+const sousTitreExport = computed(() => {
+  const c = store.state.referentiel.centres.find((x) => x.id === formulaire.centreId)
+  return c ? `Centre : ${c.nom}` : 'Centre non choisi'
+})
+const COLONNES_EXPORT = [
+  { titre: 'Produit', valeur: (l) => { const m = store.state.referentiel.medicaments.find((x) => x.id === l.medicamentId); return m ? `${m.code} — ${m.designation}` : '' } },
+  { titre: 'Stock district', valeur: (l) => (info(l) ? formaterNombre(info(l).stock) : '—'), droite: true },
+  { titre: 'Max. centre', valeur: (l) => (seuil(l) ? formaterNombre(seuil(l).maxDonnable) : 'libre'), droite: true },
+  { titre: 'Quantité', valeur: (l) => formaterNombre(Number(l.quantite) || 0), droite: true, somme: (l) => Number(l.quantite) || 0 },
+  { titre: 'Prix de vente', valeur: (l) => (prixDe(l) === null ? 'Prix non défini' : formaterMontant(prixDe(l))), droite: true },
+  { titre: 'Montant', valeur: (l) => formaterMontant((Number(l.quantite) || 0) * (prixDe(l) || 0)), droite: true,
+    somme: (l) => (Number(l.quantite) || 0) * (prixDe(l) || 0), formatTotal: formaterMontant },
+]
 
 const centresActifs = computed(() => store.state.referentiel.centres.filter((c) => c.actif))
 // Seulement les médicaments actifs AVEC du stock au dépôt (on ne peut pas servir un produit à 0)

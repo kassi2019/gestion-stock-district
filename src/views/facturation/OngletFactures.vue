@@ -30,9 +30,9 @@
         <ListeDeroulante v-model="filtres.statut" :options="options(STATUTS_FACTURE)" placeholder="Tous les statuts" />
       </div>
       <div class="periode">
-        <input v-model="filtres.du" type="date" title="Émises du" />
+        <ChampDate v-model="filtres.du" title="Émises du" />
         <span>au</span>
-        <input v-model="filtres.au" type="date" title="au" />
+        <ChampDate v-model="filtres.au" title="au" />
       </div>
       <label class="case-a-cocher"><input v-model="enRetardSeulement" type="checkbox" /> En retard</label>
       <span class="espace"></span>
@@ -110,7 +110,16 @@
         <div v-if="detail.solde > 0"><span>Avances du centre</span><strong>{{ formaterMontant(detail.avancesDisponibles) }}</strong></div>
       </div>
 
-      <h4 class="section">{{ detail.sortieStock ? 'Produits livrés (sortis du stock du district)' : 'Médicaments facturés' }}</h4>
+      <div class="titre-avec-export">
+        <h4 class="section">{{ detail.sortieStock ? 'Produits livrés (sortis du stock du district)' : 'Médicaments facturés' }}</h4>
+        <ImportExportTableau
+          :titre="`Facture ${detail.numero}`"
+          :sous-titre="`${detail.centre.nom} — ${formaterDate(detail.dateEmission)}`"
+          :nom-fichier="`facture_${detail.numero}_lignes`"
+          :colonnes-pdf="colonnesLignesFacture"
+          :lignes="detail.lignes"
+        />
+      </div>
       <table class="tableau lignes">
         <thead>
           <tr>
@@ -136,7 +145,17 @@
         </tfoot>
       </table>
 
-      <h4 class="section">Paiements reçus</h4>
+      <div class="titre-avec-export">
+        <h4 class="section">Paiements reçus</h4>
+        <ImportExportTableau
+          v-if="detail.imputations.length"
+          :titre="`Paiements de la facture ${detail.numero}`"
+          :sous-titre="detail.centre.nom"
+          :nom-fichier="`facture_${detail.numero}_paiements`"
+          :colonnes-pdf="COLONNES_PAIEMENTS_FACTURE"
+          :lignes="detail.imputations"
+        />
+      </div>
       <table v-if="detail.imputations.length" class="tableau lignes">
         <thead>
           <tr><th>Reçu</th><th>Date</th><th>Mode</th><th>Référence</th><th class="nombre">Montant réglé</th></tr>
@@ -177,6 +196,7 @@
 </template>
 
 <script setup>
+import ChampDate from '@/components/ChampDate.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
@@ -351,6 +371,28 @@ const sousTitrePdf = computed(() => {
     .filter(Boolean)
     .join(' — ')
 })
+// Export PDF / Excel des tableaux de la fenêtre « détail d'une facture »
+const colonnesLignesFacture = computed(() => [
+  { titre: 'Médicament', valeur: (l) => `${l.medicament.code} — ${l.medicament.designation}` },
+  { titre: 'Unité', valeur: (l) => l.medicament.uniteVente?.libelle || '' },
+  ...(detail.value?.sortieStock
+    ? [
+        { titre: 'Lot', valeur: (l) => l.lot?.numeroLot || '—' },
+        { titre: 'Péremption', valeur: (l) => (l.lot?.datePeremption ? formaterDate(l.lot.datePeremption) : '') },
+      ]
+    : []),
+  { titre: 'Quantité', valeur: (l) => formaterNombre(l.quantite), droite: true, somme: (l) => Number(l.quantite) },
+  { titre: 'Prix unitaire', valeur: (l) => formaterMontant(l.prixUnitaire), droite: true },
+  { titre: 'Montant', valeur: (l) => formaterMontant(l.montant), droite: true, somme: (l) => Number(l.montant), formatTotal: formaterMontant },
+])
+const COLONNES_PAIEMENTS_FACTURE = [
+  { titre: 'Reçu', valeur: (i) => i.paiement.numero },
+  { titre: 'Date', valeur: (i) => formaterDate(i.paiement.datePaiement) },
+  { titre: 'Mode', valeur: (i) => MODES_PAIEMENT[i.paiement.mode] || i.paiement.mode },
+  { titre: 'Référence', valeur: (i) => i.paiement.reference || '' },
+  { titre: 'Montant réglé', valeur: (i) => formaterMontant(i.montant), droite: true, somme: (i) => Number(i.montant), formatTotal: formaterMontant },
+]
+
 const COLONNES_PDF = [
   { titre: 'N° facture', valeur: (f) => f.numero },
   { titre: 'Émise le', valeur: (f) => formaterDate(f.dateEmission) },
@@ -371,7 +413,6 @@ defineExpose({ charger })
 
 <style scoped>
 .periode { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
-.periode input { width: 150px; }
 .case-a-cocher { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; white-space: nowrap; }
 .totaux { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin: 0.5rem 0 1rem; }
 .total-case { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.75rem 1rem; border-radius: 12px; background: var(--primary-light); }

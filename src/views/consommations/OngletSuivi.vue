@@ -16,6 +16,7 @@
       <strong class="annee">{{ annee }}</strong>
       <button class="bouton-secondaire" title="Année suivante" :disabled="annee >= anneeCourante" @click="annee++">▶</button>
       <span class="espace"></span>
+      <ImportExportTableau :titre="`Suivi des rapports ${annee}`" sous-titre="Statut et montant du rapport de chaque centre, mois par mois" :nom-fichier="`suivi_rapports_${annee}`" :colonnes-pdf="COLONNES_EXPORT" :lignes="suivi" />
       <div class="legende">
         <span class="case-legende manquant"></span> Manquant
         <span class="case-legende brouillon"></span> Brouillon
@@ -75,6 +76,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import { suiviRapportsCentre } from '@/api/consommations'
+import ImportExportTableau from '@/components/ImportExportTableau.vue'
 import { formaterMontant } from '@/utils/format'
 import { libellePeriode, MOIS, STATUTS_RAPPORT } from './consommationsCommun'
 
@@ -124,6 +126,19 @@ const resume = computed(() => {
   }
   return { attendus, recus, manquants, verifies, montantValide }
 })
+
+// ---------------------------------------------------------------------------
+// EXPORT PDF / EXCEL : une colonne par mois, avec le statut et le montant
+// ---------------------------------------------------------------------------
+function texteCase(ligne, mois) {
+  const r = ligne.mois[mois]
+  if (r) return `${STATUTS_RAPPORT[r.statut]?.libelle || r.statut} (${formaterMontant(r.montantTotal)})`
+  return estEcoule(mois) ? 'Manquant' : ''
+}
+const COLONNES_EXPORT = computed(() => [
+  { titre: 'Centre', valeur: (l) => l.centre.nom },
+  ...MOIS.map((m, i) => ({ titre: `${m.substring(0, 3)}.`, valeur: (l) => texteCase(l, i + 1) })),
+])
 
 function saisir(centreId, mois) {
   emit('ouvrir', { centreId, annee: annee.value, mois })

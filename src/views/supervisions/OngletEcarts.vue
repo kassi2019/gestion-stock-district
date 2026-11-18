@@ -17,9 +17,9 @@
         <ListeDeroulante v-model="filtres.centreId" :options="centres" champ-libelle="nom" placeholder="Tous les centres" />
       </div>
       <div class="periode">
-        <input v-model="filtres.du" type="date" title="Du" />
+        <ChampDate v-model="filtres.du" title="Du" />
         <span>au</span>
-        <input v-model="filtres.au" type="date" title="Au" />
+        <ChampDate v-model="filtres.au" title="Au" />
       </div>
       <div class="filtre">
         <ListeDeroulante v-model="sens" :options="SENS" placeholder="Manquants et excédents" />
@@ -74,6 +74,7 @@
 </template>
 
 <script setup>
+import ChampDate from '@/components/ChampDate.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import ListeDeroulante from '@/components/ListeDeroulante.vue'
@@ -161,7 +162,6 @@ onMounted(() => {
 
 <style scoped>
 .periode { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
-.periode input { width: 150px; }
 .detail { display: block; font-size: 0.75rem; color: var(--muted); }
 .totaux { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin: 0.5rem 0 1rem; }
 .total-case { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.75rem 1rem; border-radius: 12px; background: var(--primary-light); }

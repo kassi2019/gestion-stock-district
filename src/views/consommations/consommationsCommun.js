@@ -173,16 +173,12 @@ export const STATUTS_RAPPORT_CENTRE = {
 }
 
 /**
- * RAPPORT CENTRE (PDF), présenté comme la fiche papier « Rapport commande
- * mensuel recouvrables » (paysage). calcul(l) = calcul en direct de l'écran
- * (FenetreRapportCentre.vue) : { theorique, sdu, pertes, cmm, moisStock, qac, montant }.
+ * Colonnes du rapport centre (mêmes colonnes pour le PDF et l'export Excel).
+ * La colonne « Transferts » n'apparaît que si un produit a un transfert.
  */
-export function rapportCentrePdf(r, calcul) {
-  const lignes = [...r.lignes].sort((a, b) => (a.medicament?.designation || '').localeCompare(b.medicament?.designation || ''))
-  const p = r.parametres || {}
+export function colonnesRapportCentre(lignes, calcul) {
   const avecTransferts = lignes.some((l) => l.transferts !== 0)
-  const totalAVerser = lignes.reduce((t, l) => t + calcul(l).montant, 0)
-  const colonnes = [
+  return [
     { titre: 'Code produit', valeur: (l) => l.medicament?.code || '', largeur: 20 },
     { titre: 'Désignation produit', valeur: (l) => l.medicament?.designation || '' },
     { titre: 'Unité', valeur: (l) => l.medicament?.uniteVente?.libelle || l.medicament?.unite || '', largeur: 14 },
@@ -199,6 +195,19 @@ export function rapportCentrePdf(r, calcul) {
     { titre: 'Quantité accordée', valeur: (l) => (l.quantiteAccordee === null || l.quantiteAccordee === undefined ? '' : formaterNombre(l.quantiteAccordee)), droite: true, largeur: 15 },
     { titre: 'Montant à verser', valeur: (l) => formaterMontant(calcul(l).montant), droite: true, largeur: 22 },
   ]
+}
+
+/**
+ * RAPPORT CENTRE (PDF), présenté comme la fiche papier « Rapport commande
+ * mensuel recouvrables » (paysage). calcul(l) = calcul en direct de l'écran
+ * (FenetreRapportCentre.vue) : { theorique, sdu, pertes, cmm, moisStock, qac, montant }.
+ */
+export function rapportCentrePdf(r, calcul) {
+  const lignes = [...r.lignes].sort((a, b) => (a.medicament?.designation || '').localeCompare(b.medicament?.designation || ''))
+  const p = r.parametres || {}
+  const avecTransferts = lignes.some((l) => l.transferts !== 0)
+  const totalAVerser = lignes.reduce((t, l) => t + calcul(l).montant, 0)
+  const colonnes = colonnesRapportCentre(lignes, calcul)
   return exporterDocumentPdf({
     titre: 'RAPPORT COMMANDE MENSUEL RECOUVRABLES',
     numero: r.numero,

@@ -58,7 +58,9 @@ export function bonDeReceptionPdf(reception) {
     ],
     colonnes: [
       { titre: 'N°', valeur: (l) => reception.lignes.indexOf(l) + 1, largeur: 9 },
-      { titre: 'Médicament', valeur: (l) => designation(l.medicament) },
+      // Observation de la ligne (facultative) écrite sous le nom du médicament
+      { titre: 'Médicament', valeur: (l) => designation(l.medicament) + (l.observation ? `\nObs. : ${l.observation}` : '') },
+      { titre: 'Unité', valeur: (l) => l.medicament.uniteVente?.libelle || '', largeur: 20 },
       { titre: 'Lot', valeur: (l) => l.numeroLot || '—', largeur: 24 },
       { titre: 'Péremption', valeur: (l) => (l.datePeremption ? formaterDate(l.datePeremption) : '—'), largeur: 22 },
       { titre: 'Quantité', valeur: (l) => formaterNombre(l.quantite), droite: true, largeur: 20 },

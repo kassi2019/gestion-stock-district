@@ -25,9 +25,9 @@
         <ListeDeroulante v-model="filtres.statut" :options="options(STATUTS_SUPERVISION)" placeholder="Tous les statuts" />
       </div>
       <div class="periode">
-        <input v-model="filtres.du" type="date" title="Du" />
+        <ChampDate v-model="filtres.du" title="Du" />
         <span>au</span>
-        <input v-model="filtres.au" type="date" title="Au" />
+        <ChampDate v-model="filtres.au" title="Au" />
       </div>
       <span class="espace"></span>
       <ImportExportTableau titre="Supervisions des centres" :sous-titre="sousTitrePdf" nom-fichier="supervisions" :colonnes-pdf="COLONNES_PDF" :lignes="lignesTriees" />
@@ -108,7 +108,7 @@
         </div>
         <div>
           <label class="obligatoire">Date du contrôle</label>
-          <input v-model="formulaire.dateSupervision" type="date" :max="dateDuJour()" required :disabled="lectureSeule" @change="chargerPreparation" />
+          <ChampDate v-model="formulaire.dateSupervision" :max="dateDuJour()" obligatoire :desactive="lectureSeule" @change="chargerPreparation" />
         </div>
 
         <!-- Agents présents -->
@@ -143,6 +143,13 @@
               <button type="button" class="bouton-lien" @click="chargerMedicamentsDuCentre">+ Charger les médicaments du centre ({{ preparation.medicaments.length }})</button>
               <button v-si-imprimer type="button" class="bouton-lien" :disabled="!preparation.medicaments.length" @click="imprimerFicheComptage">Fiche de comptage (PDF)</button>
             </template>
+            <ImportExportTableau
+              :titre="`Supervision ${formulaire.numero || '(nouvelle)'} — stock théorique et physique`"
+              :sous-titre="`Au ${formaterDate(formulaire.dateSupervision)}`"
+              :nom-fichier="`supervision_${formulaire.numero || 'nouvelle'}`"
+              :colonnes-pdf="colonnesLignesSupervision"
+              :lignes="formulaire.lignes.filter((l) => l.medicamentId)"
+            />
           </div>
           <table class="tableau lignes">
             <thead>
@@ -252,7 +259,7 @@
         </label>
         <div v-if="decision.decision === 'FACTURATION'" class="champ">
           <label class="obligatoire">Date de la facture</label>
-          <input v-model="decision.dateFacture" type="date" :max="dateDuJour()" required />
+          <ChampDate v-model="decision.dateFacture" :max="dateDuJour()" obligatoire />
           <small class="aide">Montant facturé : {{ formaterMontant(formulaire.valeurManquants) }} (manquants seulement ; les excédents ne sont pas déduits).</small>
         </div>
         <div class="champ">
@@ -271,6 +278,7 @@
 </template>
 
 <script setup>
+import ChampDate from '@/components/ChampDate.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import FenetreModale from '@/components/FenetreModale.vue'
@@ -633,6 +641,17 @@ const sousTitrePdf = computed(() => {
   const c = centres.value.find((x) => x.id === filtres.centreId)
   return [c ? `Centre : ${c.nom}` : 'Tous les centres', filtres.statut ? STATUTS_SUPERVISION[filtres.statut].libelle : 'tous les statuts'].join(' — ')
 })
+// Export PDF / Excel des lignes de la fenêtre de supervision
+const colonnesLignesSupervision = computed(() => [
+  { titre: 'Médicament', valeur: (l) => libelleMedicament(l) },
+  { titre: 'Lot', valeur: (l) => l.lot?.numeroLot || lotsDe(l.medicamentId).find((x) => x.id === l.lotId)?.numeroLot || '—' },
+  { titre: `Théorique au ${formaterDate(formulaire.value?.dateSupervision)}`, valeur: (l) => formaterNombre(theorique(l)), droite: true },
+  { titre: 'Physique', valeur: (l) => (l.stockPhysique === null || l.stockPhysique === undefined || l.stockPhysique === '' ? '' : formaterNombre(l.stockPhysique)), droite: true },
+  { titre: 'Écart', valeur: (l) => (ecart(l) === null ? '—' : texteEcart(ecart(l))), droite: true },
+  { titre: 'Valeur', valeur: (l) => (valeur(l) === null ? '—' : formaterMontant(valeur(l))), droite: true, somme: (l) => valeur(l) || 0, formatTotal: formaterMontant },
+  { titre: 'Commentaire', valeur: (l) => l.commentaire || '' },
+])
+
 const COLONNES_PDF = [
   { titre: 'N°', valeur: (s) => s.numero },
   { titre: 'Date', valeur: (s) => formaterDate(s.dateSupervision) },
@@ -662,7 +681,6 @@ onMounted(async () => {
 
 <style scoped>
 .periode { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
-.periode input { width: 150px; }
 .detail { display: block; font-size: 0.75rem; color: var(--muted); }
 .agents { max-width: 220px; font-size: 0.85rem; }
 .manque { color: var(--danger); }

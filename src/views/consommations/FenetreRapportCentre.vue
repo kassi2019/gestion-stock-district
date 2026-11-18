@@ -81,6 +81,13 @@
         <input v-model="recherche" class="recherche" type="search" placeholder="Filtrer les produits…" />
         <span class="espace"></span>
         <small class="detail">CMM sur {{ rapport.parametres.moisCmm }} mois · colonnes en vert : à saisir</small>
+        <ImportExportTableau
+          :titre="`Rapport ${rapport.numero} — ${rapport.centre.nom}`"
+          :sous-titre="libellePeriode(rapport.annee, rapport.mois)"
+          :nom-fichier="`rapport_${rapport.numero}`"
+          :colonnes-pdf="colonnesExport"
+          :lignes="lignesAffichees"
+        />
       </div>
       <div class="tableau-conteneur">
         <table class="tableau grille">
@@ -160,7 +167,17 @@
       </div>
 
       <!-- Transferts du mois -->
-      <h4 class="section">Transferts entre centres ({{ libellePeriode(rapport.annee, rapport.mois) }})</h4>
+      <div class="titre-avec-export">
+        <h4 class="section">Transferts entre centres ({{ libellePeriode(rapport.annee, rapport.mois) }})</h4>
+        <ImportExportTableau
+          v-if="rapport.transferts.length"
+          :titre="`Transferts — ${rapport.centre.nom}`"
+          :sous-titre="libellePeriode(rapport.annee, rapport.mois)"
+          :nom-fichier="`transferts_${rapport.numero}`"
+          :colonnes-pdf="COLONNES_TRANSFERTS"
+          :lignes="rapport.transferts"
+        />
+      </div>
       <table v-if="rapport.transferts.length" class="tableau lignes">
         <thead><tr><th>Sens</th><th>Centre</th><th>Produit</th><th class="nombre">Quantité</th><th>Motif</th><th v-if="!lectureSeule"></th></tr></thead>
         <tbody>
@@ -222,6 +239,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useStore } from 'vuex'
 import FenetreModale from '@/components/FenetreModale.vue'
 import ListeDeroulante from '@/components/ListeDeroulante.vue'
+import ImportExportTableau from '@/components/ImportExportTableau.vue'
 import { confirmer, demanderTexte } from '@/utils/alertes'
 import { nomPersonne } from '@/utils/documentPdf'
 import { formaterDate, formaterMontant, formaterNombre } from '@/utils/format'
@@ -236,7 +254,7 @@ import {
 } from '@/api/consommations'
 import { trouverFacture } from '@/api/facturation'
 import { facturePdf } from '@/views/facturation/financesCommun'
-import { libellePeriode, rapportCentrePdf, STATUTS_RAPPORT_CENTRE } from './consommationsCommun'
+import { colonnesRapportCentre, libellePeriode, rapportCentrePdf, STATUTS_RAPPORT_CENTRE } from './consommationsCommun'
 
 const props = defineProps({ rapportId: { type: Number, required: true } })
 const emit = defineEmits(['fermer', 'modifie'])
@@ -308,6 +326,23 @@ function calcul(l) {
 const totalAccorde = computed(() => (rapport.value?.lignes || []).reduce((t, l) => t + (l.quantiteAccordee || 0), 0))
 const totalAVerser = computed(() => arrondi((rapport.value?.lignes || []).reduce((t, l) => t + calcul(l).montant, 0)))
 /** Colonne « Transferts » affichée seulement s'il y en a ce mois-ci. */
+// ---------------------------------------------------------------------------
+// EXPORT PDF / EXCEL des tableaux de la fenêtre
+// ---------------------------------------------------------------------------
+/** Mêmes colonnes que le rapport PDF, avec le total du montant à verser. */
+const colonnesExport = computed(() =>
+  colonnesRapportCentre(rapport.value?.lignes || [], calcul).map((c) =>
+    c.titre === 'Montant à verser' ? { ...c, somme: (l) => calcul(l).montant, formatTotal: formaterMontant } : c,
+  ),
+)
+const COLONNES_TRANSFERTS = [
+  { titre: 'Sens', valeur: (t) => (t.centreSource.id === rapport.value.centreId ? 'Cédé' : 'Reçu') },
+  { titre: 'Centre', valeur: (t) => (t.centreSource.id === rapport.value.centreId ? t.centreDestination.nom : t.centreSource.nom) },
+  { titre: 'Produit', valeur: (t) => t.medicament.designation },
+  { titre: 'Quantité', valeur: (t) => formaterNombre(t.quantite), droite: true },
+  { titre: 'Motif', valeur: (t) => t.motif || '' },
+]
+
 const avecTransferts = computed(() => (rapport.value?.lignes || []).some((l) => l.transferts !== 0))
 
 /** Ajoute un produit, puis enregistre : le serveur renvoie son prix et le stock du district. */
