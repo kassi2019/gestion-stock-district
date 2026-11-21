@@ -14,6 +14,12 @@
       immédiatement (lots dont la péremption est la plus proche d'abord).
   Une facture validée ne se modifie pas (correction = annulation tracée).
 
+  CODES-BARRES : champ « Scanner ou saisir le code-barres » (caméra, clavier,
+  douchette) ou « 📱 Scanner avec le téléphone » (boîtes scannées à la suite).
+  Une boîte scannée ajoute le produit (quantité 1) ; le même produit rescanné
+  = + 1 sur sa ligne. Code inconnu, produit désactivé ou sans stock : refusé
+  (le code se rattache dans Paramétrage > Médicaments ou à la réception).
+
   Après validation, la MÊME fenêtre passe au paiement puis au récapitulatif
   (AssistantFacture.vue : ① Facture -> ② Paiement -> ③ Terminé).
 
@@ -43,6 +49,28 @@
           <h4 class="section">Produits livrés</h4>
           <ImportExportTableau titre="Facture manuelle — produits livrés" :sous-titre="sousTitreExport" nom-fichier="facture_manuelle" :colonnes-pdf="COLONNES_EXPORT" :lignes="lignesExport" />
         </div>
+        <!-- Scan des boîtes livrées : caméra, clavier / douchette, ou téléphone -->
+        <div class="zone-scan">
+          <div class="ligne-scan">
+            <ChampCodeBarre continu titre-camera="Scanner les boîtes livrées" @code="ajouterParCode" />
+            <button v-if="!telephone.actif.value" type="button" class="bouton-secondaire" @click="telephone.demarrer()">
+              📱 Scanner avec le téléphone
+            </button>
+          </div>
+          <div v-if="telephone.actif.value" class="attente-telephone">
+            <span class="pulsation"></span>
+            <div>
+              <strong>Le téléphone peut scanner les boîtes…</strong>
+              <small>
+                Sur le téléphone : page <strong>/scanner</strong> de l’application → « Le poste attend un code » → <strong>Scanner</strong>.
+                {{ telephone.recus.value ? `${telephone.recus.value} boîte(s) reçue(s).` : '' }}
+              </small>
+            </div>
+            <button type="button" class="bouton-secondaire" @click="telephone.arreter()">Terminer</button>
+          </div>
+          <p v-if="dernierScan" class="dernier-scan" :class="{ inconnu: dernierScan.inconnu }">{{ dernierScan.texte }}</p>
+        </div>
+
         <table class="tableau lignes">
           <thead>
             <tr>
@@ -121,7 +149,11 @@
 
 <script setup>
 import ChampDate from '@/components/ChampDate.vue'
-import { computed, onMounted, reactive, ref } from 'vue'
+import ChampCodeBarre from '@/components/ChampCodeBarre.vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import http from '@/api/http'
+import { bip, codeValide } from '@/utils/codeBarre'
+import { utiliserScanDistant } from '@/utils/scanDistant'
 import { useStore } from 'vuex'
 import AssistantFacture from './AssistantFacture.vue'
 import ListeDeroulante from '@/components/ListeDeroulante.vue'
@@ -192,6 +224,72 @@ const total = computed(() => formulaire.lignes.reduce((t, l) => t + (Number(l.qu
 function ajouterLigne() {
   formulaire.lignes.push(nouvelleLigne())
 }
+
+// ---------------------------------------------------------------------------
+// CODES-BARRES : une boîte scannée = 1 unité sur la ligne du produit
+// ---------------------------------------------------------------------------
+const dernierScan = ref(null)
+
+/** Produit d'un code : liste déjà chargée, sinon serveur (code ajouté entre-temps). */
+async function medicamentDuCode(code) {
+  const local = store.state.referentiel.medicaments.find((m) => m.codesBarres?.some((c) => c.code === code))
+  if (local) return local
+  try {
+    const { data } = await http.get(`/medicaments/code-barre/${encodeURIComponent(code)}`)
+    await store.dispatch('referentiel/charger', { liste: 'medicaments' })
+    return store.state.referentiel.medicaments.find((m) => m.id === data.medicament.id) ?? null
+  } catch {
+    return null
+  }
+}
+
+/** Refuse le scan : bip grave + message sous le champ. */
+function refuser(texte) {
+  bip(true)
+  dernierScan.value = { inconnu: true, texte: `✗ ${texte}` }
+}
+
+async function ajouterParCode(code) {
+  if (factureCreee.value) return // facture déjà validée : plus de saisie
+  if (!codeValide(code)) return refuser(`Code-barres invalide : ${code}`)
+  const m = await medicamentDuCode(code)
+  if (!m) return refuser(`Code ${code} inconnu : rattachez-le au médicament (Paramétrage > Médicaments, ou à la réception).`)
+  if (!m.actif) return refuser(`${m.designation} est désactivé.`)
+  if (!(m.stockActuel > 0)) return refuser(`${m.designation} : plus de stock au district.`)
+
+  // Même produit déjà sur une ligne : + 1 ; sinon ligne vide ou nouvelle ligne
+  let ligne = formulaire.lignes.find((l) => l.medicamentId === m.id)
+  if (ligne) ligne.quantite = (Number(ligne.quantite) || 0) + 1
+  else {
+    ligne = formulaire.lignes.find((l) => !l.medicamentId)
+    if (!ligne) {
+      formulaire.lignes.push(nouvelleLigne())
+      ligne = formulaire.lignes[formulaire.lignes.length - 1]
+    }
+    ligne.medicamentId = m.id
+    ligne.quantite = 1
+    await actualiser()
+  }
+  bip()
+  dernierScan.value = {
+    texte: `✓ ${m.designation} — quantité ${ligne.quantite}.${depasse(ligne) ? ' ⚠ Dépasse le stock du district.' : ''}`,
+  }
+}
+
+// Scan avec le téléphone : les boîtes scannées sur le téléphone arrivent à la suite
+const telephone = utiliserScanDistant({
+  libelle: () => {
+    const c = store.state.referentiel.centres.find((x) => x.id === formulaire.centreId)
+    return `Facture manuelle${c ? ` — ${c.nom}` : ''}`
+  },
+  continu: true,
+  surCode: ajouterParCode,
+})
+watch(() => formulaire.centreId, () => telephone.renommer())
+// Facture validée : le téléphone arrête d'envoyer
+watch(factureCreee, (f) => {
+  if (f) telephone.arreter()
+})
 
 /** Stock du district et prix de vente des produits choisis (centre + date). */
 async function actualiser() {
@@ -270,4 +368,31 @@ onMounted(() => {
 .bloc { display: block; font-size: 0.75rem; }
 .perime { color: var(--danger); font-style: italic; }
 .champ-erreur { border-color: var(--danger); }
+/* Scan des boîtes */
+.zone-scan { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.75rem; }
+.ligne-scan { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.ligne-scan > :first-child { flex: 1; min-width: 260px; }
+.attente-telephone {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: 10px;
+  background: var(--primary-light);
+}
+.attente-telephone > div { flex: 1; }
+.attente-telephone small { display: block; color: var(--muted); }
+.pulsation {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--primary);
+  animation: pulsation 1.2s infinite;
+}
+@keyframes pulsation {
+  0% { box-shadow: 0 0 0 0 rgba(0, 163, 108, 0.6); }
+  100% { box-shadow: 0 0 0 10px rgba(0, 163, 108, 0); }
+}
+.dernier-scan { margin: 0; font-size: 0.88rem; color: #15803d; }
+.dernier-scan.inconnu { color: var(--danger); }
 </style>

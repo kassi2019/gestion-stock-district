@@ -21,6 +21,13 @@
     les médicaments dans le STOCK du district (irréversible ; une erreur se
     corrige par un ajustement dans le module Stock).
   - Bon de réception (PDF) et pièces justificatives.
+  - CODES-BARRES (réception en brouillon) : champ « Scanner ou saisir le
+    code-barres » (caméra, clavier, douchette) ou « 📱 Scanner avec le téléphone »
+    (les boîtes scannées sur le téléphone arrivent ici à la suite).
+      * boîte CONNUE   : le médicament est ajouté (dernier prix d'achat proposé) ;
+        le même médicament rescanné = + 1 sur sa dernière ligne (dernier lot) ;
+      * boîte INCONNUE : une ligne à compléter est ajoutée ; le code est RATTACHÉ
+        au médicament choisi sur cette ligne (reconnu aux prochains scans).
 
   Événement : @modifie -> la page met à jour les compteurs
   =============================================================================
@@ -151,6 +158,28 @@
               :lignes="formulaire.lignes.filter((l) => l.medicamentId)"
             />
           </div>
+          <!-- Scan des boîtes reçues : caméra, clavier / douchette, ou téléphone -->
+          <div v-if="!lectureSeule" class="zone-scan">
+            <div class="ligne-scan">
+              <ChampCodeBarre continu titre-camera="Scanner les boîtes reçues" @code="ajouterParCode" />
+              <button v-if="!telephone.actif.value" type="button" class="bouton-secondaire" @click="telephone.demarrer()">
+                📱 Scanner avec le téléphone
+              </button>
+            </div>
+            <div v-if="telephone.actif.value" class="attente-telephone">
+              <span class="pulsation"></span>
+              <div>
+                <strong>Le téléphone peut scanner les boîtes…</strong>
+                <small>
+                  Sur le téléphone : page <strong>/scanner</strong> de l’application → « Le poste attend un code » → <strong>Scanner</strong>.
+                  {{ telephone.recus.value ? `${telephone.recus.value} boîte(s) reçue(s).` : '' }}
+                </small>
+              </div>
+              <button type="button" class="bouton-secondaire" @click="telephone.arreter()">Terminer</button>
+            </div>
+            <p v-if="dernierScan" class="dernier-scan" :class="{ inconnu: dernierScan.inconnu }">{{ dernierScan.texte }}</p>
+          </div>
+
           <p v-if="!lectureSeule" class="aide-prix">
             Le prix d'achat proposé est le dernier prix payé pour ce médicament : modifiez-le s'il a changé.
             Les quantités et prix sont par unité de comptage.
@@ -181,6 +210,9 @@
                     @update:model-value="(id) => choisirMedicament(ligne, id)"
                   />
                   <span v-else>{{ libelleMedicament(ligne.medicamentId) }}</span>
+                  <small v-if="!lectureSeule && ligne.codeARattacher" class="detail code-a-rattacher">
+                    Code <strong class="code">{{ ligne.codeARattacher }}</strong> inconnu : choisissez le médicament, le code lui sera rattaché.
+                  </small>
                   <small v-if="suiviLot(ligne.medicamentId)" class="detail lot-requis">lot et péremption obligatoires</small>
                 </td>
                 <!-- Unité de comptage : celle de la fiche du médicament (à quoi correspond la quantité) -->
@@ -269,6 +301,10 @@
 
 <script setup>
 import ChampMontant from '@/components/ChampMontant.vue'
+import ChampCodeBarre from '@/components/ChampCodeBarre.vue'
+import { bip, codeValide } from '@/utils/codeBarre'
+import { utiliserScanDistant } from '@/utils/scanDistant'
+import http from '@/api/http'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import FenetreModale from '@/components/FenetreModale.vue'
@@ -346,9 +382,12 @@ function videFormulaire() {
     lignes: [nouvelleLigne()],
   }
 }
-/** Ligne vide. prixUnitaire = null tant que le prix n'est ni proposé ni saisi. */
+/**
+ * Ligne vide. prixUnitaire = null tant que le prix n'est ni proposé ni saisi.
+ * codeARattacher : code-barres inconnu scanné, rattaché au médicament choisi sur la ligne.
+ */
 function nouvelleLigne(medicamentId = null, quantite = 1, prixUnitaire = null) {
-  return { medicamentId, quantite, prixUnitaire, numeroLot: '', datePeremption: '', observation: '' }
+  return { medicamentId, quantite, prixUnitaire, numeroLot: '', datePeremption: '', observation: '', codeARattacher: null }
 }
 
 /** Vrai si la ligne a un prix d'achat (0 accepté, ex. don). */
@@ -419,11 +458,109 @@ function ajouterLot(index) {
   formulaire.value.lignes.splice(index + 1, 0, nouvelleLigne(l.medicamentId, 1, l.prixUnitaire))
 }
 
-/** Médicament choisi : son dernier prix d'achat est proposé. */
+/** Médicament choisi : son dernier prix d'achat est proposé (+ code-barres inconnu rattaché). */
 function choisirMedicament(ligne, medicamentId) {
   ligne.prixUnitaire = null
   if (medicamentId) actualiserPrix()
+  if (medicamentId && ligne.codeARattacher) rattacherCode(ligne)
 }
+
+// ---------------------------------------------------------------------------
+// CODES-BARRES : une boîte scannée = 1 unité de comptage sur la ligne du médicament
+// ---------------------------------------------------------------------------
+const dernierScan = ref(null)
+
+/** Médicament d'un code : liste déjà chargée, sinon serveur (code ajouté entre-temps). */
+async function medicamentDuCode(code) {
+  const local = medicaments.value.find((m) => m.codesBarres?.some((c) => c.code === code))
+  if (local) return local
+  try {
+    const { data } = await http.get(`/medicaments/code-barre/${encodeURIComponent(code)}`)
+    store.dispatch('referentiel/charger', { liste: 'medicaments' }).catch(() => {})
+    return data.medicament
+  } catch {
+    return null
+  }
+}
+
+/** Ligne vide à remplir (sinon une nouvelle ligne en bas). */
+function ligneLibre() {
+  const f = formulaire.value
+  let ligne = f.lignes.find((l) => !l.medicamentId && !l.codeARattacher)
+  if (!ligne) {
+    f.lignes.push(nouvelleLigne())
+    ligne = f.lignes[f.lignes.length - 1]
+  }
+  return ligne
+}
+
+async function ajouterParCode(code) {
+  const f = formulaire.value
+  if (!f || lectureSeule.value) return
+  if (!codeValide(code)) {
+    bip(true)
+    dernierScan.value = { inconnu: true, texte: `✗ Code-barres invalide : ${code}` }
+    return
+  }
+  const m = await medicamentDuCode(code)
+  if (!m) {
+    // Code inconnu : ligne à compléter, le code sera rattaché au médicament choisi
+    bip(true)
+    ligneLibre().codeARattacher = code
+    dernierScan.value = { inconnu: true, texte: `✗ Code ${code} inconnu : choisissez le médicament sur la ligne ajoutée, le code lui sera rattaché.` }
+    return
+  }
+  if (!m.actif) {
+    bip(true)
+    dernierScan.value = { inconnu: true, texte: `✗ ${m.designation} est désactivé (Paramétrage > Médicaments).` }
+    return
+  }
+  // Même médicament déjà sur une ligne : + 1 sur sa DERNIÈRE ligne (dernier lot saisi)
+  const lignesDuMedicament = f.lignes.filter((l) => l.medicamentId === m.id)
+  let ligne = lignesDuMedicament[lignesDuMedicament.length - 1]
+  if (ligne) ligne.quantite = (Number(ligne.quantite) || 0) + 1
+  else {
+    ligne = ligneLibre()
+    ligne.medicamentId = m.id
+    ligne.quantite = 1
+    choisirMedicament(ligne, m.id)
+  }
+  bip()
+  dernierScan.value = {
+    texte: `✓ ${m.designation} — quantité ${ligne.quantite}.${m.suiviLot ? ' Saisissez le n° de lot et la péremption.' : ''}`,
+  }
+}
+
+/** Rattache le code inconnu de la ligne au médicament choisi. */
+async function rattacherCode(ligne) {
+  const code = ligne.codeARattacher
+  ligne.codeARattacher = null
+  try {
+    await http.post(`/medicaments/${ligne.medicamentId}/codes-barres`, { code })
+    store.dispatch('notifications/succes', `Code ${code} rattaché à ${libelleMedicament(ligne.medicamentId)}.`)
+    await store.dispatch('referentiel/charger', { liste: 'medicaments' })
+  } catch (erreur) {
+    store.dispatch('notifications/erreurApi', erreur)
+  }
+}
+
+// Scan avec le téléphone : les boîtes scannées sur le téléphone arrivent à la suite
+const telephone = utiliserScanDistant({
+  libelle: () => {
+    const f = fournisseurs.value.find((x) => x.id === formulaire.value?.fournisseurId)
+    return `Réception${f ? ` — ${f.raisonSociale}` : ''}`
+  },
+  continu: true,
+  surCode: ajouterParCode,
+})
+watch(() => formulaire.value?.fournisseurId, () => telephone.renommer())
+// Fenêtre fermée ou autre réception ouverte : l'attente du téléphone s'arrête
+watch(formulaire, (nouveau, ancien) => {
+  if (nouveau !== ancien) {
+    dernierScan.value = null
+    if (telephone.actif.value) telephone.arreter()
+  }
+})
 
 function medicament(id) {
   return medicaments.value.find((m) => m.id === id)
@@ -624,4 +761,32 @@ onMounted(() => {
 .lignes .total { font-size: 1.05rem; font-weight: 800; color: var(--primary-dark); }
 .lignes tfoot td { border-bottom: none; }
 textarea { width: 100%; resize: vertical; }
+/* Scan des boîtes */
+.zone-scan { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.75rem; }
+.ligne-scan { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.ligne-scan > :first-child { flex: 1; min-width: 260px; }
+.attente-telephone {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: 10px;
+  background: var(--primary-light);
+}
+.attente-telephone > div { flex: 1; }
+.attente-telephone small { display: block; color: var(--muted); }
+.pulsation {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--primary);
+  animation: pulsation 1.2s infinite;
+}
+@keyframes pulsation {
+  0% { box-shadow: 0 0 0 0 rgba(0, 163, 108, 0.6); }
+  100% { box-shadow: 0 0 0 10px rgba(0, 163, 108, 0); }
+}
+.dernier-scan { margin: 0; font-size: 0.88rem; color: #15803d; }
+.dernier-scan.inconnu { color: var(--danger); }
+.code-a-rattacher { color: var(--danger); }
 </style>

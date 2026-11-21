@@ -49,6 +49,13 @@ const routes = [
         component: () => import('@/views/DashboardView.vue'),
         meta: { titre: 'Accueil' },
       },
+      // Écran « Scanner » (téléphone) : envoie les codes-barres au poste qui les attend
+      {
+        path: 'scanner',
+        name: 'scanner',
+        component: () => import('@/views/ScannerTelephoneView.vue'),
+        meta: { titre: 'Scanner', modulesScan: ['parametrage', 'achats', 'facturation'] },
+      },
       ...routesDesModules,
     ],
   },
@@ -83,6 +90,12 @@ router.beforeEach((pageDemandee) => {
   // Page d'un module : il faut au moins la LECTURE sur ce module (voir utils/droits.js)
   const module = pageDemandee.meta.module
   if (module && !store.getters['auth/peutVoir'](module.code)) {
+    return { name: 'dashboard' }
+  }
+
+  // Écran Scanner : il faut voir au moins un des modules qui utilisent le scan
+  const modulesScan = pageDemandee.meta.modulesScan
+  if (modulesScan && !modulesScan.some((m) => store.getters['auth/peutVoir'](m))) {
     return { name: 'dashboard' }
   }
 })

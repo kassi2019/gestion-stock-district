@@ -16,6 +16,14 @@
       * le STOCK : saisi à la création (stock initial du dépôt, avec n° de lot
         si suivi par lot), puis seulement AFFICHÉ (il change ensuite par les
         réceptions, livraisons et inventaires).
+  - CODES-BARRES de la boîte (section du formulaire) : scannés avec la caméra,
+    une douchette, saisis au clavier, ou « 📱 Téléphone » (le code scanné sur le
+    téléphone arrive dans le formulaire). Un médicament peut en avoir plusieurs.
+      * création : les codes sont enregistrés avec le médicament ;
+      * modification : chaque code ajouté / retiré est enregistré AUSSITÔT.
+    La recherche trouve aussi un médicament par son code-barres (douchette).
+    Adresse ?onglet=medicaments&codeBarre=... (écran Scanner du téléphone) :
+    ouvre un nouveau médicament avec ce code.
   - Bouton "Prix" : ouvre l'onglet Prix sur ce médicament (événement "voir-prix") ;
   - Même logique que l'onglet Centres pour créer / modifier / désactiver.
   =============================================================================
@@ -23,7 +31,7 @@
 <template>
   <div>
     <div class="barre-outils">
-      <input v-model="recherche" class="recherche" type="search" placeholder="Rechercher (code, désignation)…" />
+      <input v-model="recherche" class="recherche" type="search" placeholder="Rechercher (code, désignation, code-barres)…" />
       <div class="filtre">
         <ListeDeroulante v-model="familleFiltre" :options="familles" placeholder="Toutes les familles" />
       </div>
@@ -51,6 +59,7 @@
           <tr>
             <ColonneTri v-model="tri" cle="code">Code</ColonneTri>
             <ColonneTri v-model="tri" cle="designation">Désignation</ColonneTri>
+            <ColonneTri v-model="tri" cle="codeBarre">Code-barres</ColonneTri>
             <ColonneTri v-model="tri" cle="forme">Forme / dosage</ColonneTri>
             <ColonneTri v-model="tri" cle="unite">Unité</ColonneTri>
             <ColonneTri v-model="tri" cle="famille">Famille</ColonneTri>
@@ -69,6 +78,13 @@
               <strong>{{ med.designation }}</strong>
               <span v-if="med.consommable" class="badge badge-orange">Consommable</span>
               <div v-if="med.conditionnement" class="detail">{{ med.conditionnement }}</div>
+            </td>
+            <!-- Codes-barres de la boîte (un par ligne s'il y en a plusieurs) -->
+            <td class="col-code-barre">
+              <template v-if="med.codesBarres?.length">
+                <div v-for="c in med.codesBarres" :key="c.id" class="code">{{ c.code }}</div>
+              </template>
+              <span v-else class="detail">—</span>
             </td>
             <td>{{ [med.forme?.libelle, med.dosage].filter(Boolean).join(' · ') || '—' }}</td>
             <td>{{ med.unite }}</td>
@@ -144,6 +160,28 @@
           <input v-model.trim="formulaire.dosage" maxlength="50" placeholder="ex. 500 mg" />
         </div>
 
+        <!-- ---------- Codes-barres de la boîte ---------- -->
+        <h4 class="section pleine-largeur">Codes-barres de la boîte</h4>
+        <div class="pleine-largeur codes-barres">
+          <div class="ligne-scan">
+            <ChampCodeBarre titre-camera="Scanner la boîte du médicament" @code="ajouterCode" />
+            <button v-if="!telephone.actif.value" type="button" class="bouton-secondaire" @click="telephone.demarrer()">📱 Téléphone</button>
+            <button v-else type="button" class="bouton-secondaire" @click="telephone.arreter()">Arrêter le téléphone</button>
+          </div>
+          <p v-if="telephone.actif.value" class="attente-telephone">
+            Le téléphone peut scanner la boîte : page <strong>/scanner</strong> de l’application → « Le poste attend un code ».
+          </p>
+          <div v-if="formulaire.codesBarres.length" class="liste-codes">
+            <span v-for="c in formulaire.codesBarres" :key="c.code" class="puce-code">
+              <span class="code">{{ c.code }}</span>
+              <button type="button" class="retirer" title="Retirer ce code" @click="retirerCode(c)">×</button>
+            </span>
+          </div>
+          <small v-else class="aide">
+            Aucun code. Scannez la boîte : le médicament sera reconnu à la réception et à la facture.
+          </small>
+        </div>
+
         <!-- ---------- Vente ---------- -->
         <h4 class="section pleine-largeur">Vente</h4>
         <div>
@@ -213,7 +251,12 @@
 <script setup>
 import ChampMontant from '@/components/ChampMontant.vue'
 import ChampDate from '@/components/ChampDate.vue'
-import { computed, onMounted, ref } from 'vue'
+import ChampCodeBarre from '@/components/ChampCodeBarre.vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import http from '@/api/http'
+import { bip, codeValide, normaliserCode } from '@/utils/codeBarre'
+import { utiliserScanDistant } from '@/utils/scanDistant'
 import { useStore } from 'vuex'
 import FenetreModale from '@/components/FenetreModale.vue'
 import ListeDeroulante from '@/components/ListeDeroulante.vue'
@@ -226,6 +269,7 @@ import { enDateImport, enNombreImport, enOuiNon, enTexte, sansChampsVides, trouv
 import { formaterMontant, formaterNombre } from '@/utils/format'
 
 const store = useStore()
+const route = useRoute()
 const emit = defineEmits(['voir-prix'])
 
 /** Libellé de l'unité de vente choisie (ex. « Flacon »), « Boîte » par défaut. */
@@ -260,6 +304,9 @@ const medicamentsAffiches = computed(() => {
     if (!afficherInactifs.value && !m.actif) return false
     if (familleFiltre.value && m.familleId !== familleFiltre.value) return false
     if (!texte) return true
+    // (le code-barres doit être exact : c'est ce que tape une douchette)
+    const codeBarre = normaliserCode(recherche.value)
+    if (m.codesBarres?.some((c) => c.code === codeBarre)) return true
     return [m.code, m.designation].some((v) => (v || '').toLowerCase().includes(texte))
   })
 })
@@ -289,6 +336,7 @@ function ouvrirFormulaire(medicament = null) {
         // Prix de vente en cours (modifiable : un nouveau prix sera créé s'il change)
         prixVente: medicament.prixVenteActuel ?? '',
         consommable: medicament.consommable ? 'OUI' : 'NON',
+        codesBarres: [...(medicament.codesBarres ?? [])],
       }
     : {
         code: '',
@@ -307,6 +355,8 @@ function ouvrirFormulaire(medicament = null) {
         stockInitial: '',
         numeroLot: '',
         datePeremption: '',
+        // Codes-barres scannés : { code } (enregistrés avec le médicament)
+        codesBarres: [],
       }
 }
 
@@ -337,6 +387,7 @@ async function enregistrer() {
               stockInitial: Number(f.stockInitial) || '',
               numeroLot: f.numeroLot,
               datePeremption: f.datePeremption,
+              codesBarres: f.codesBarres.map((c) => c.code),
             }),
       },
     })
@@ -351,6 +402,72 @@ async function enregistrer() {
     enregistrement.value = false
   }
 }
+
+// ---------------------------------------------------------------------------
+// CODES-BARRES DE LA BOÎTE (caméra, douchette, clavier ou téléphone)
+// ---------------------------------------------------------------------------
+
+/**
+ * Ajoute un code scanné au formulaire.
+ * Création : gardé dans le formulaire (enregistré avec le médicament).
+ * Modification : rattaché AUSSITÔT au médicament (le serveur refuse un code
+ * qui appartient déjà à un autre médicament).
+ */
+async function ajouterCode(code) {
+  const f = formulaire.value
+  if (!f) return
+  if (!codeValide(code)) {
+    bip(true)
+    return store.dispatch('notifications/erreur', `Code-barres invalide : ${code}`)
+  }
+  if (f.codesBarres.some((c) => c.code === code)) {
+    return store.dispatch('notifications/info', `Le code ${code} est déjà sur ce médicament.`)
+  }
+  // Déjà pris par un autre médicament de la liste ? (le serveur vérifie aussi)
+  const autre = medicaments.value.find((m) => m.id !== f.id && m.codesBarres?.some((c) => c.code === code))
+  if (autre) {
+    bip(true)
+    return store.dispatch('notifications/erreur', `Le code ${code} appartient déjà à « ${autre.designation} ».`)
+  }
+  if (!f.id) {
+    f.codesBarres.push({ code })
+    return
+  }
+  try {
+    const { data } = await http.post(`/medicaments/${f.id}/codes-barres`, { code })
+    f.codesBarres.push(data)
+    store.dispatch('notifications/succes', `Code ${code} ajouté.`)
+    await charger()
+  } catch (erreur) {
+    bip(true)
+    store.dispatch('notifications/erreurApi', erreur)
+  }
+}
+
+/** Retire un code (en modification : retiré aussitôt du médicament). */
+async function retirerCode(c) {
+  const f = formulaire.value
+  if (f.id && c.id) {
+    try {
+      await http.delete(`/medicaments/${f.id}/codes-barres/${c.id}`)
+      await charger()
+    } catch (erreur) {
+      return store.dispatch('notifications/erreurApi', erreur)
+    }
+  }
+  f.codesBarres = f.codesBarres.filter((x) => x.code !== c.code)
+}
+
+// Scan avec le téléphone : le code de la boîte arrive dans le formulaire ouvert
+const telephone = utiliserScanDistant({
+  libelle: () => (formulaire.value?.designation ? `Médicament — ${formulaire.value.designation}` : 'Nouveau médicament'),
+  continu: true,
+  surCode: (code) => ajouterCode(code),
+})
+// Formulaire fermé : le téléphone arrête d'envoyer ses codes ici
+watch(formulaire, (f) => {
+  if (!f) telephone.arreter()
+})
 
 async function changerActif(medicament) {
   const confirme = await confirmer({
@@ -392,6 +509,7 @@ const sousTitrePdf = computed(() => {
 const COLONNES_PDF = [
   { titre: 'Code', valeur: (m) => m.code },
   { titre: 'Désignation', valeur: (m) => m.designation },
+  { titre: 'Code-barres', valeur: (m) => (m.codesBarres ?? []).map((c) => c.code).join(', ') },
   { titre: 'Forme / dosage', valeur: (m) => [m.forme?.libelle, m.dosage].filter(Boolean).join(' · ') },
   { titre: 'Unité', valeur: (m) => m.unite },
   { titre: 'Famille', valeur: (m) => m.famille?.libelle },
@@ -517,6 +635,7 @@ async function importerLigne(valeurs) {
 const VALEURS_TRI = {
   code: (m) => m.code,
   designation: (m) => m.designation,
+  codeBarre: (m) => m.codesBarres?.[0]?.code,
   forme: (m) => m.forme?.libelle,
   unite: (m) => m.unite,
   famille: (m) => m.famille?.libelle,
@@ -529,11 +648,20 @@ const VALEURS_TRI = {
 // Retour à la page 1 quand la recherche, un filtre ou le tri change
 const { tri, lignesTriees, page, taille, lignesPage } = utiliserTableau(medicamentsAffiches, [recherche, familleFiltre, afficherInactifs], VALEURS_TRI)
 
-onMounted(charger)
+onMounted(async () => {
+  await charger()
+  // Venu de l'écran Scanner du téléphone (code inconnu) : nouveau médicament avec ce code
+  const code = normaliserCode(route.query.codeBarre)
+  if (code && codeValide(code)) {
+    ouvrirFormulaire()
+    formulaire.value.codesBarres.push({ code })
+  }
+})
 </script>
 
 <style scoped>
 .detail { font-size: 0.78rem; color: var(--muted); }
+.col-code-barre { white-space: nowrap; font-size: 0.85rem; }
 /* Formulaire sur 3 colonnes (fenêtre large) ; « double » = champ sur 2 colonnes */
 .grille-formulaire.trois-colonnes { grid-template-columns: repeat(3, 1fr); }
 .grille-formulaire.trois-colonnes .double { grid-column: span 2; }
@@ -571,4 +699,28 @@ onMounted(charger)
 }
 .stock-actuel strong { font-size: 1.15rem; color: var(--primary-dark); }
 .stock-actuel .aide { flex-basis: 100%; margin: 0; }
+/* Codes-barres de la boîte */
+.codes-barres { display: flex; flex-direction: column; gap: 0.5rem; }
+.ligne-scan { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.ligne-scan > :first-child { flex: 1; min-width: 240px; }
+.attente-telephone { margin: 0; font-size: 0.85rem; color: var(--primary-dark); }
+.liste-codes { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.puce-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.3rem 0.2rem 0.65rem;
+  border-radius: 999px;
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  font-size: 0.88rem;
+}
+.puce-code .retirer {
+  padding: 0 0.4rem;
+  background: transparent;
+  color: var(--primary-dark);
+  font-size: 1.05rem;
+  line-height: 1;
+}
+.puce-code .retirer:hover { background: var(--danger); color: #fff; }
 </style>
