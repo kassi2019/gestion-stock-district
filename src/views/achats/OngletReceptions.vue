@@ -188,11 +188,9 @@
                 <td class="nombre"><input v-model.number="ligne.quantite" type="number" min="1" step="1" required :disabled="lectureSeule" /></td>
                 <!-- Prix d'achat : dernier prix proposé, modifiable -->
                 <td class="nombre">
-                  <input
-                    v-model.number="ligne.prixUnitaire"
-                    type="number"
-                    min="0"
-                    step="0.01"
+                  <ChampMontant
+                    v-model="ligne.prixUnitaire"
+                    decimales
                     class="champ-prix"
                     :class="{ 'prix-manquant': ligne.medicamentId && !prixSaisi(ligne) }"
                     :placeholder="ligne.medicamentId ? 'À saisir' : ''"
@@ -270,6 +268,7 @@
 </template>
 
 <script setup>
+import ChampMontant from '@/components/ChampMontant.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import FenetreModale from '@/components/FenetreModale.vue'

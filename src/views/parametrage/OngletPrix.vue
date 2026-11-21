@@ -159,7 +159,7 @@
         <form v-si-modif class="nouveau-prix" @submit.prevent="enregistrerPrixVente">
           <div>
             <label class="obligatoire">Nouveau prix (FCFA)</label>
-            <input v-model.number="nouveauPrixVente.prix" type="number" min="0" step="1" required />
+            <ChampMontant v-model="nouveauPrixVente.prix" required />
           </div>
           <div>
             <label class="obligatoire">À partir du</label>
@@ -216,7 +216,7 @@
         <form v-si-modif class="nouveau-prix" @submit.prevent="enregistrerPrixAchat">
           <div>
             <label class="obligatoire">Nouveau prix (FCFA)</label>
-            <input v-model.number="nouveauPrixAchat.prix" type="number" min="0" step="1" required />
+            <ChampMontant v-model="nouveauPrixAchat.prix" required />
           </div>
           <div>
             <label class="obligatoire">À partir du</label>
@@ -265,7 +265,7 @@
       <form id="form-correction" class="grille-formulaire" @submit.prevent="enregistrerCorrection">
         <div>
           <label class="obligatoire">Montant correct (FCFA)</label>
-          <input v-model="correction.prix" type="number" min="0" step="1" required />
+          <ChampMontant v-model="correction.prix" required />
         </div>
         <div>
           <label class="obligatoire">Motif</label>
@@ -284,6 +284,7 @@
 </template>
 
 <script setup>
+import ChampMontant from '@/components/ChampMontant.vue'
 import ChampDate from '@/components/ChampDate.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useStore } from 'vuex'

@@ -14,11 +14,14 @@
       immédiatement (lots dont la péremption est la plus proche d'abord).
   Une facture validée ne se modifie pas (correction = annulation tracée).
 
-  Événements : @fermer ; @creee(facture) -> l'onglet ouvre la facture créée
+  Après validation, la MÊME fenêtre passe au paiement puis au récapitulatif
+  (AssistantFacture.vue : ① Facture -> ② Paiement -> ③ Terminé).
+
+  Événements : @fermer (rien créé) ; @creee(facture) -> fenêtre fermée après création
   =============================================================================
 -->
 <template>
-  <FenetreModale titre="Nouvelle facture manuelle (sortie de stock)" tres-large @fermer="emit('fermer')">
+  <AssistantFacture titre="Nouvelle facture manuelle (sortie de stock)" :facture="factureCreee" @fermer="emit('fermer')" @termine="(f) => emit('creee', f)">
     <p class="aide">
       Pour une urgence ou une rupture en cours de mois. Le prix de vente vient de Paramétrage &gt; Prix ;
       la quantité ne peut pas dépasser le stock disponible au district, ni le stock maximum du centre
@@ -111,16 +114,16 @@
 
     <template #pied>
       <button class="bouton-secondaire" type="button" @click="emit('fermer')">Annuler</button>
-      <button v-si-modif type="submit" form="form-facture-manuelle" :disabled="enregistrement">Valider la facture (sortie de stock)</button>
+      <button v-si-modif type="submit" form="form-facture-manuelle" :disabled="enregistrement">Valider la facture et continuer →</button>
     </template>
-  </FenetreModale>
+  </AssistantFacture>
 </template>
 
 <script setup>
 import ChampDate from '@/components/ChampDate.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useStore } from 'vuex'
-import FenetreModale from '@/components/FenetreModale.vue'
+import AssistantFacture from './AssistantFacture.vue'
 import ListeDeroulante from '@/components/ListeDeroulante.vue'
 import ImportExportTableau from '@/components/ImportExportTableau.vue'
 import { confirmer } from '@/utils/alertes'
@@ -135,6 +138,7 @@ const nouvelleLigne = () => ({ cle: ++compteur, medicamentId: null, quantite: 1 
 const formulaire = reactive({ centreId: null, dateEmission: dateDuJour(), lignes: [nouvelleLigne()] })
 const infos = ref({}) // { medicamentId: { stock, prixVente } }
 const enregistrement = ref(false)
+const factureCreee = ref(null) // facture validée : l'assistant passe au paiement
 
 // ---------------------------------------------------------------------------
 // EXPORT PDF / EXCEL des lignes saisies (lignes avec un produit choisi)
@@ -230,7 +234,7 @@ async function valider() {
       lignes: lignes.map((l) => ({ medicamentId: l.medicamentId, quantite: Number(l.quantite) })),
     })
     store.dispatch('notifications/succes', `Facture ${facture.numero} validée : stock du district mis à jour.`)
-    emit('creee', facture)
+    factureCreee.value = facture // étape suivante (paiement) dans la même fenêtre
   } catch (erreur) {
     store.dispatch('notifications/erreurApi', erreur)
   } finally {

@@ -153,7 +153,7 @@
         </div>
         <div>
           <label>Prix de vente (FCFA)</label>
-          <input v-model="formulaire.prixVente" type="number" min="0" step="1" placeholder="ex. 500" />
+          <ChampMontant v-model="formulaire.prixVente" placeholder="ex. 500" />
           <small class="aide">
             Prix par {{ libelleUniteVente(formulaire.uniteVenteId).toLowerCase() }}.
             <template v-if="formulaire.id">S'il change, un nouveau prix est créé à la date du jour (historique dans l'onglet Prix).</template>
@@ -211,6 +211,7 @@
 </template>
 
 <script setup>
+import ChampMontant from '@/components/ChampMontant.vue'
 import ChampDate from '@/components/ChampDate.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useStore } from 'vuex'

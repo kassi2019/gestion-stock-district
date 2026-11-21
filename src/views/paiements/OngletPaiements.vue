@@ -4,9 +4,8 @@
   =============================================================================
   Encaissements des centres (cahier des charges §3.6) :
   - NOUVEAU PAIEMENT : centre, date, mode, référence, montant. Le montant est
-    RÉPARTI sur les factures non soldées du centre (« Répartir
-    automatiquement » : les plus anciennes d'abord, modifiable ligne par
-    ligne). Le reste non réparti devient une AVANCE.
+    RÉPARTI sur les factures non soldées du centre ; le reste devient une
+    AVANCE. Formulaire commun : FormulairePaiement.vue.
   - AVANCE : paiement sans facture ; « Imputer » la répartit plus tard.
   - REÇU en PDF ; ANNULATION tracée (motif) : factures recalculées.
   Propriété : preparation ({ centreId, factureId }) venant d'une facture
@@ -76,81 +75,19 @@
     </div>
 
     <!-- ===================== NOUVEAU PAIEMENT / IMPUTATION ===================== -->
-    <FenetreModale v-if="formulaire" :titre="formulaire.paiementId ? `Imputer l'avance du reçu ${formulaire.numero}` : 'Nouveau paiement'" tres-large @fermer="formulaire = null">
-      <form id="form-paiement" class="grille-formulaire" @submit.prevent="enregistrer">
-        <template v-if="!formulaire.paiementId">
-          <div>
-            <label class="obligatoire">Centre de santé</label>
-            <ListeDeroulante v-model="formulaire.centreId" :options="centres" champ-libelle="nom" placeholder="— Choisir le centre —" @update:model-value="chargerFactures" />
-          </div>
-          <div>
-            <label class="obligatoire">Date du paiement</label>
-            <ChampDate v-model="formulaire.datePaiement" :max="dateDuJour()" obligatoire />
-          </div>
-          <div>
-            <label class="obligatoire">Mode de paiement</label>
-            <ListeDeroulante v-model="formulaire.mode" :options="options(MODES_PAIEMENT)" :effacable="false" />
-          </div>
-          <div>
-            <label>Référence</label>
-            <input v-model.trim="formulaire.reference" maxlength="100" placeholder="N° de chèque, de virement, de transaction…" />
-          </div>
-          <div>
-            <label class="obligatoire">Montant reçu (FCFA)</label>
-            <input v-model.number="formulaire.montant" type="number" min="1" step="1" required class="montant" />
-          </div>
-          <div>
-            <label>Observations</label>
-            <input v-model.trim="formulaire.observations" maxlength="255" />
-          </div>
-        </template>
-        <div v-else class="pleine-largeur encart">
-          Avance disponible : <strong>{{ formaterMontant(formulaire.montant) }}</strong> — centre <strong>{{ formulaire.centreNom }}</strong>.
-        </div>
-
-        <div class="pleine-largeur">
-          <div class="entete-section">
-            <h4 class="section">Répartition sur les factures non soldées</h4>
-            <button v-if="formulaire.factures.length" type="button" class="bouton-lien" @click="repartir">Répartir automatiquement (plus anciennes d'abord)</button>
-            <ImportExportTableau
-              v-if="formulaire.factures.length"
-              titre="Factures non soldées"
-              :sous-titre="formulaire.centreNom || ''"
-              nom-fichier="factures_non_soldees"
-              :colonnes-pdf="COLONNES_REPARTITION"
-              :lignes="formulaire.factures"
-            />
-          </div>
-          <table v-if="formulaire.factures.length" class="tableau lignes">
-            <thead>
-              <tr><th>Facture</th><th>Objet</th><th>Échéance</th><th class="nombre">Montant</th><th class="nombre">Reste à payer</th><th class="nombre">Montant réglé</th></tr>
-            </thead>
-            <tbody>
-              <tr v-for="f in formulaire.factures" :key="f.id" :class="{ cible: f.id === formulaire.factureCible }">
-                <td class="code">{{ f.numero }}</td>
-                <td>{{ objetFacture(f) }}</td>
-                <td :class="{ retard: f.enRetard }">{{ f.dateEcheance ? formaterDate(f.dateEcheance) : '—' }}</td>
-                <td class="nombre">{{ formaterMontant(f.montantTotal) }}</td>
-                <td class="nombre">{{ formaterMontant(f.solde) }}</td>
-                <td class="nombre"><input v-model.number="f.impute" type="number" min="0" :max="f.solde" step="1" placeholder="0" /></td>
-              </tr>
-            </tbody>
-          </table>
-          <p v-else-if="formulaire.centreId" class="aide">Ce centre n'a aucune facture non soldée : le montant sera enregistré comme <strong>avance</strong>.</p>
-          <p v-else class="aide">Choisissez le centre pour afficher ses factures non soldées.</p>
-
-          <div v-if="formulaire.centreId" class="recap">
-            <span>Montant {{ formulaire.paiementId ? 'disponible' : 'reçu' }} : <strong>{{ formaterMontant(formulaire.montant || 0) }}</strong></span>
-            <span>Réparti : <strong>{{ formaterMontant(totalReparti) }}</strong></span>
-            <span :class="{ erreur: resteAvance < 0 }">
-              {{ resteAvance < 0 ? 'Dépassement' : 'Reste en avance' }} : <strong>{{ formaterMontant(Math.abs(resteAvance)) }}</strong>
-            </span>
-          </div>
-        </div>
-      </form>
+    <!-- Le formulaire lui-même est dans FormulairePaiement.vue (réutilisé par la Facturation) -->
+    <FenetreModale v-if="saisie" :titre="saisie.avance ? `Imputer l'avance du reçu ${saisie.avance.numero}` : 'Nouveau paiement'" tres-large @fermer="saisie = null">
+      <FormulairePaiement
+        ref="formPaiement"
+        :centre-id="saisie.centreId"
+        :facture-cible="saisie.factureCible"
+        :avance="saisie.avance"
+        @enregistre="apresEnregistrement"
+        @impossible="saisie = null"
+      />
       <template #pied>
-        <button class="bouton-secondaire" @click="formulaire = null">Annuler</button>
-        <button type="submit" form="form-paiement" :disabled="enregistrement">{{ formulaire.paiementId ? "Imputer l'avance" : 'Enregistrer le paiement' }}</button>
+        <button class="bouton-secondaire" @click="saisie = null">Annuler</button>
+        <button type="submit" form="form-paiement" :disabled="formPaiement?.enregistrement">{{ saisie.avance ? "Imputer l'avance" : 'Enregistrer le paiement' }}</button>
       </template>
     </FenetreModale>
 
@@ -210,15 +147,16 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import FenetreModale from '@/components/FenetreModale.vue'
 import ListeDeroulante from '@/components/ListeDeroulante.vue'
+import FormulairePaiement from './FormulairePaiement.vue'
 import ImportExportTableau from '@/components/ImportExportTableau.vue'
 import Pagination from '@/components/Pagination.vue'
 import ColonneTri from '@/components/ColonneTri.vue'
 import { utiliserTableau } from '@/utils/pagination'
 import { confirmer, demanderTexte } from '@/utils/alertes'
 import { nomPersonne } from '@/utils/documentPdf'
-import { dateDuJour, formaterDate, formaterMontant } from '@/utils/format'
-import { annulerPaiement, creerPaiement, facturesNonSoldees, imputerPaiement, listerPaiements, trouverPaiement } from '@/api/facturation'
-import { MODES_PAIEMENT, objetFacture, options, recuPdf } from '@/views/facturation/financesCommun'
+import { formaterDate, formaterMontant } from '@/utils/format'
+import { annulerPaiement, listerPaiements, trouverPaiement } from '@/api/facturation'
+import { MODES_PAIEMENT, options, recuPdf } from '@/views/facturation/financesCommun'
 
 const props = defineProps({
   /** { centreId, factureId } : paiement d'une facture précise (depuis Facturation) */
@@ -232,7 +170,8 @@ const chargement = ref(false)
 const enregistrement = ref(false)
 const recherche = ref('')
 const filtres = reactive({ centreId: null, mode: null, du: '', au: '', avecAvance: false })
-const formulaire = ref(null)
+const saisie = ref(null) // fenêtre « Nouveau paiement / Imputer l'avance » ouverte
+const formPaiement = ref(null) // composant FormulairePaiement (bouton désactivé pendant l'envoi)
 const detail = ref(null)
 
 const centres = computed(() => store.state.referentiel.centres)
@@ -256,96 +195,19 @@ async function charger() {
 watch(filtres, charger)
 
 // ---------------------------------------------------------------------------
-// NOUVEAU PAIEMENT
+// NOUVEAU PAIEMENT (formulaire : FormulairePaiement.vue)
 // ---------------------------------------------------------------------------
-async function nouveau(centreId = null, factureCible = null) {
-  formulaire.value = {
-    centreId,
-    datePaiement: dateDuJour(),
-    mode: 'ESPECES',
-    reference: '',
-    montant: null,
-    observations: '',
-    factures: [],
-    factureCible,
-  }
-  if (centreId) await chargerFactures()
+/** saisie = { centreId, factureCible, avance } : ouvre la fenêtre du formulaire. */
+function nouveau(centreId = null, factureCible = null) {
+  saisie.value = { centreId, factureCible, avance: null }
 }
 
-async function chargerFactures() {
-  const f = formulaire.value
-  f.factures = []
-  if (!f.centreId) return
-  try {
-    f.factures = (await facturesNonSoldees(f.centreId)).map((x) => ({ ...x, impute: null }))
-    // Paiement d'une facture précise : montant proposé = son reste à payer
-    const cible = f.factures.find((x) => x.id === f.factureCible)
-    if (cible && !f.paiementId) {
-      f.montant = cible.solde
-      cible.impute = cible.solde
-    }
-  } catch (erreur) {
-    store.dispatch('notifications/erreurApi', erreur)
-  }
-}
-
-const totalReparti = computed(() => (formulaire.value?.factures || []).reduce((t, f) => t + (Number(f.impute) || 0), 0))
-const resteAvance = computed(() => (Number(formulaire.value?.montant) || 0) - totalReparti.value)
-
-/** Répartit le montant sur les factures, les plus anciennes d'abord. */
-function repartir() {
-  let reste = Number(formulaire.value.montant) || 0
-  for (const f of formulaire.value.factures) {
-    const part = Math.min(reste, f.solde)
-    f.impute = part > 0 ? part : null
-    reste -= Math.max(part, 0)
-  }
-}
-
-async function enregistrer() {
-  const f = formulaire.value
-  if (!f.centreId) return store.dispatch('notifications/erreur', 'Choisissez le centre de santé.')
-  if (!(Number(f.montant) > 0)) return store.dispatch('notifications/erreur', 'Indiquez le montant.')
-  const trop = f.factures.find((x) => (Number(x.impute) || 0) > x.solde)
-  if (trop) return store.dispatch('notifications/erreur', `Facture ${trop.numero} : le montant réglé dépasse le reste à payer.`)
-  if (resteAvance.value < 0) return store.dispatch('notifications/erreur', 'Le total réparti dépasse le montant.')
-  const imputations = f.factures.filter((x) => Number(x.impute) > 0).map((x) => ({ factureId: x.id, montant: Number(x.impute) }))
-
-  if (f.paiementId) {
-    if (imputations.length === 0) return store.dispatch('notifications/erreur', 'Indiquez le montant à imputer sur au moins une facture.')
-  } else {
-    const avance = resteAvance.value
-    const confirme = await confirmer({
-      titre: 'Enregistrer le paiement ?',
-      texte: `${formaterMontant(f.montant)} reçus : ${formaterMontant(totalReparti.value)} sur ${imputations.length} facture(s)${avance > 0 ? `, ${formaterMontant(avance)} en avance` : ''}.`,
-      boutonConfirmer: 'Oui, enregistrer',
-    })
-    if (!confirme) return
-  }
-
-  enregistrement.value = true
-  try {
-    const paiement = f.paiementId
-      ? await imputerPaiement(f.paiementId, imputations)
-      : await creerPaiement({
-          centreId: f.centreId,
-          datePaiement: f.datePaiement,
-          montant: Number(f.montant),
-          mode: f.mode,
-          reference: f.reference || undefined,
-          observations: f.observations || undefined,
-          imputations,
-        })
-    store.dispatch('notifications/succes', f.paiementId ? 'Avance imputée.' : `Paiement enregistré : reçu ${paiement.numero}.`)
-    formulaire.value = null
-    detail.value = paiement
-    await charger()
-    emit('modifie')
-  } catch (erreur) {
-    store.dispatch('notifications/erreurApi', erreur)
-  } finally {
-    enregistrement.value = false
-  }
+/** Paiement enregistré (ou avance imputée) : on affiche le reçu. */
+async function apresEnregistrement(paiement) {
+  saisie.value = null
+  detail.value = paiement
+  await charger()
+  emit('modifie')
 }
 
 // ---------------------------------------------------------------------------
@@ -361,28 +223,16 @@ async function ouvrir(p) {
 
 async function imprimer(p) {
   try {
-    recuPdf(await trouverPaiement(p.id))
+    await recuPdf(await trouverPaiement(p.id))
   } catch (erreur) {
     store.dispatch('notifications/erreurApi', erreur)
   }
 }
 
-async function imputer() {
-  const d = detail.value
-  formulaire.value = {
-    paiementId: d.id,
-    numero: d.numero,
-    centreId: d.centreId,
-    centreNom: d.centre.nom,
-    montant: Number(d.montantNonImpute),
-    factures: [],
-  }
+/** Imputer l'avance restante d'un reçu sur les factures non soldées du centre. */
+function imputer() {
+  saisie.value = { centreId: detail.value.centreId, factureCible: null, avance: detail.value }
   detail.value = null
-  await chargerFactures()
-  if (formulaire.value.factures.length === 0) {
-    store.dispatch('notifications/erreur', "Ce centre n'a aucune facture non soldée sur laquelle imputer l'avance.")
-    formulaire.value = null
-  }
 }
 
 async function annuler() {
@@ -436,15 +286,7 @@ const sousTitrePdf = computed(() => {
     .filter(Boolean)
     .join(' — ')
 })
-// Export PDF / Excel des tableaux des fenêtres
-const COLONNES_REPARTITION = [
-  { titre: 'Facture', valeur: (f) => f.numero },
-  { titre: 'Objet', valeur: (f) => objetFacture(f) },
-  { titre: 'Échéance', valeur: (f) => (f.dateEcheance ? formaterDate(f.dateEcheance) : '—') },
-  { titre: 'Montant', valeur: (f) => formaterMontant(f.montantTotal), droite: true, somme: (f) => Number(f.montantTotal), formatTotal: formaterMontant },
-  { titre: 'Reste à payer', valeur: (f) => formaterMontant(f.solde), droite: true, somme: (f) => Number(f.solde), formatTotal: formaterMontant },
-  { titre: 'Montant réglé', valeur: (f) => formaterMontant(Number(f.impute) || 0), droite: true, somme: (f) => Number(f.impute) || 0, formatTotal: formaterMontant },
-]
+// Export PDF / Excel du tableau de la fenêtre « reçu »
 const COLONNES_FACTURES_REGLEES = [
   { titre: 'Facture', valeur: (i) => i.facture.numero },
   { titre: 'Date', valeur: (i) => formaterDate(i.facture.dateEmission) },
@@ -473,17 +315,10 @@ onMounted(() => {
 .case-a-cocher { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; white-space: nowrap; }
 .detail { display: block; font-size: 0.75rem; color: var(--muted); }
 .avance { color: #b35c00; }
-.montant { font-size: 1.05rem; font-weight: 700; }
 .encart { padding: 0.65rem 0.9rem; border-radius: 8px; background: var(--primary-light); color: var(--primary-dark); font-size: 0.9rem; }
 .encart-alerte { margin-bottom: 1rem; background: #fdecec; color: #8f1d1d; }
-.entete-section { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .section { flex: 1; margin: 0.75rem 0 0.5rem; padding-bottom: 0.35rem; border-bottom: 1px solid var(--border); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--primary); }
 .lignes td { padding: 0.45rem 0.5rem; }
-.lignes input[type='number'] { width: 120px; text-align: right; }
-tr.cible td { background: var(--primary-light); }
-.retard { color: var(--danger); font-weight: 600; }
-.recap { display: flex; flex-wrap: wrap; gap: 1.5rem; margin-top: 0.75rem; padding: 0.6rem 0.9rem; border-radius: 8px; background: #f7faf8; font-size: 0.9rem; }
-.recap .erreur { color: var(--danger); }
 .fiche { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem 1rem; margin-bottom: 1rem; padding: 0.85rem 1rem; border-radius: 10px; background: #f7faf8; }
 .fiche div { display: flex; flex-direction: column; gap: 0.1rem; }
 .fiche span { font-size: 0.75rem; color: var(--muted); }

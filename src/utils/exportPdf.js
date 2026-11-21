@@ -71,9 +71,15 @@ export async function infosDistrict() {
     ]
       .filter(Boolean)
       .join(' · ')
-    return { nom: valeur('NOM_DISTRICT') || 'District sanitaire', contact, responsable: valeur('DISTRICT_RESPONSABLE') }
+    return {
+      nom: valeur('NOM_DISTRICT') || 'District sanitaire',
+      contact,
+      responsable: valeur('DISTRICT_RESPONSABLE'),
+      region: valeur('DISTRICT_REGION'), // ex. utilisé sur le reçu de paiement
+      localite: valeur('DISTRICT_LOCALITE'), // « Fait à ... »
+    }
   } catch {
-    return { nom: 'District sanitaire', contact: '', responsable: '' }
+    return { nom: 'District sanitaire', contact: '', responsable: '', region: '', localite: '' }
   }
 }
 

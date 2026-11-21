@@ -4,12 +4,14 @@
  * =============================================================================
  *   - STATUTS des factures, MODES de paiement ;
  *   - FACTURE en PDF ;
- *   - REÇU DE PAIEMENT en PDF ;
+ *   - REÇU DE PAIEMENT en PDF (2 exemplaires sur une page A4, à découper) ;
  *   - RELEVÉ DE COMPTE d'un centre en PDF.
  * =============================================================================
  */
 import { exporterDocumentPdf, nomPersonne, nomUtilisateurConnecte } from '@/utils/documentPdf'
+import { infosDistrict, nettoyerTexte } from '@/utils/exportPdf'
 import { formaterDate, formaterMontant, formaterNombre } from '@/utils/format'
+import { montantEnLettres } from '@/utils/montantEnLettres'
 
 export const STATUTS_FACTURE = {
   EMISE: { libelle: 'Émise (à payer)', badge: 'badge-bleu' },
@@ -113,44 +115,186 @@ export function facturePdf(f) {
   })
 }
 
-/** REÇU DE PAIEMENT (PDF). */
-export function recuPdf(p) {
-  const impute = p.imputations.reduce((t, i) => t + Number(i.montant), 0)
-  return exporterDocumentPdf({
-    titre: p.type === 'AVANCE' ? "REÇU D'AVANCE" : 'REÇU DE PAIEMENT',
-    numero: p.numero,
-    statut: p.annule ? 'ANNULÉ' : formaterDate(p.datePaiement),
-    encadres: [
-      encadreCentre(p.centre),
-      {
-        titre: 'Paiement',
-        lignes: [
-          ['Date', formaterDate(p.datePaiement)],
-          ['Mode', MODES_PAIEMENT[p.mode] || p.mode],
-          ['Référence', p.reference],
-          ['Montant reçu', formaterMontant(p.montant)],
-          ['Réparti sur factures', formaterMontant(impute)],
-          ['Avance restante', formaterMontant(p.montantNonImpute)],
-        ],
-      },
-    ],
-    colonnes: [
-      { titre: 'Facture', valeur: (i) => i.facture.numero, largeur: 40 },
-      { titre: 'Date de la facture', valeur: (i) => formaterDate(i.facture.dateEmission), largeur: 35 },
-      { titre: 'Montant de la facture', valeur: (i) => formaterMontant(i.facture.montantTotal), droite: true },
-      { titre: 'Montant réglé', valeur: (i) => formaterMontant(i.montant), droite: true, largeur: 35 },
-    ],
-    lignes: p.imputations,
-    total: { libelle: 'MONTANT REÇU', valeur: formaterMontant(p.montant) },
-    observations: [p.observations, p.annule ? `REÇU ANNULÉ le ${formaterDate(p.dateAnnulation)} — motif : ${p.motifAnnulation}` : '']
-      .filter(Boolean)
-      .join('\n'),
-    signatures: [
-      { libelle: 'Le comptable / caissier', nom: nomPersonne(p.utilisateur) },
-      { libelle: 'Le payeur (centre de santé)', nom: p.centre.responsable || '' },
-    ],
-    nomFichier: `recu_${p.numero}`,
-  })
+/** « en espèces », « par chèque n° 1234 »... (phrase du reçu) */
+function modeEnPhrase(p) {
+  const ref = p.reference ? ` n° ${p.reference}` : ''
+  if (p.mode === 'ESPECES') return 'en espèces'
+  if (p.mode === 'CHEQUE') return `par chèque${ref}`
+  if (p.mode === 'VIREMENT') return `par virement${ref}`
+  if (p.mode === 'MOBILE_MONEY') return `par mobile money${ref}`
+  return `par ${(MODES_PAIEMENT[p.mode] || p.mode || '').toLowerCase()}${ref}`
+}
+
+/**
+ * REÇU DE PAIEMENT (PDF) — une page A4 portrait coupée en DEUX exemplaires
+ * identiques (demi-page chacun) : « Exemplaire district » en haut,
+ * « Exemplaire centre de santé » en bas, séparés par un trait « découper ici ».
+ * Les deux parties signent, on coupe, chacun garde sa moitié.
+ *
+ * Texte : « Je soussigné(e) [gestionnaire], gestionnaire du [district],
+ * reconnais avoir reçu de M./Mme [responsable], responsable du centre de santé
+ * [centre], la somme de [en lettres] francs CFA ([en chiffres]) [mode], pour
+ * l'achat de médicaments. » + factures réglées + SOLDE du compte après ce paiement.
+ * L'en-tête (nom, région, localité, contacts) vient de Paramétrage > Paramètres généraux.
+ */
+export async function recuPdf(p) {
+  const [{ jsPDF }, district] = await Promise.all([import('jspdf'), infosDistrict()])
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const largeur = doc.internal.pageSize.getWidth() // 210
+  const demiPage = doc.internal.pageSize.getHeight() / 2 // 148,5
+  const marge = 14
+  const t = nettoyerTexte // texte sûr pour la police du PDF (espaces insécables...)
+
+  const gestionnaire = nomPersonne(p.utilisateur) || '..........................................'
+  const responsable = p.centre.responsable || '..........................................'
+  const montant = Number(p.montant)
+
+  // Phrase principale
+  const phrase =
+    `Je soussigné(e), ${gestionnaire}, gestionnaire du ${district.nom}, reconnais avoir reçu de ` +
+    `M./Mme ${responsable}, responsable du centre de santé ${p.centre.nom} (code ${p.centre.code}), ` +
+    `la somme de ${montantEnLettres(montant).toUpperCase()} FRANCS CFA (${formaterMontant(montant)}), ` +
+    `${modeEnPhrase(p)}, pour l'achat de médicaments.`
+
+  // Affectation du paiement : factures réglées ou avance
+  const factures = p.imputations.map((i) => i.facture.numero)
+  const affectation = factures.length
+    ? `En règlement de : ${factures.length > 1 ? 'factures' : 'facture'} ${factures.join(', ')}` +
+      (Number(p.montantNonImpute) > 0 ? ` (dont ${formaterMontant(p.montantNonImpute)} en avance).` : '.')
+    : 'Versé à titre d\'avance sur les prochaines factures.'
+
+  // Solde du compte du centre juste après ce paiement (calculé par le serveur)
+  const solde = Number(p.soldeApres ?? 0)
+  const texteSolde =
+    solde > 0
+      ? `Solde du compte du centre après ce paiement : ${formaterMontant(solde)} restant à payer.`
+      : solde < 0
+        ? `Solde du compte du centre après ce paiement : avance de ${formaterMontant(-solde)} en faveur du centre.`
+        : 'Solde du compte du centre après ce paiement : 0 FCFA (compte soldé).'
+
+  /** Dessine un exemplaire du reçu à partir de la hauteur y0. */
+  function exemplaire(y0, libelleExemplaire) {
+    // --- En-tête : district à gauche, titre et numéro à droite
+    doc.setFillColor(0, 163, 108)
+    doc.rect(0, y0, largeur, 3, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(12)
+    doc.setTextColor(0, 122, 80)
+    doc.text(doc.splitTextToSize(t(district.nom).toUpperCase(), 110), marge, y0 + 11)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(107, 114, 128)
+    const infos = [district.region ? `Région sanitaire : ${district.region}` : '', district.contact].filter(Boolean)
+    infos.forEach((ligne, i) => doc.text(doc.splitTextToSize(t(ligne), 110)[0], marge, y0 + 16 + i * 4))
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(14)
+    doc.setTextColor(31, 41, 55)
+    doc.text('REÇU DE PAIEMENT', largeur - marge, y0 + 11, { align: 'right' })
+    doc.setFontSize(10)
+    doc.setTextColor(0, 122, 80)
+    doc.text(`N° ${t(p.numero)}`, largeur - marge, y0 + 17, { align: 'right' })
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(107, 114, 128)
+    doc.text(libelleExemplaire, largeur - marge, y0 + 22, { align: 'right' })
+
+    doc.setDrawColor(0, 163, 108)
+    doc.setLineWidth(0.4)
+    doc.line(marge, y0 + 27, largeur - marge, y0 + 27)
+
+    // --- Lieu et date
+    doc.setFontSize(9.5)
+    doc.setTextColor(31, 41, 55)
+    const lieu = district.localite ? `Fait à ${district.localite}, le ` : 'Le '
+    doc.text(t(`${lieu}${formaterDate(p.datePaiement)}`), largeur - marge, y0 + 34, { align: 'right' })
+
+    // --- Corps du reçu
+    let y = y0 + 42
+    doc.setFontSize(10.5)
+    const lignesPhrase = doc.splitTextToSize(t(phrase), largeur - 2 * marge)
+    doc.text(lignesPhrase, marge, y, { lineHeightFactor: 1.45 })
+    y += lignesPhrase.length * 5.4 + 2
+
+    doc.setFontSize(9.5)
+    const lignesAffectation = doc.splitTextToSize(t(affectation), largeur - 2 * marge)
+    doc.text(lignesAffectation, marge, y)
+    y += lignesAffectation.length * 4.5 + 2
+
+    // Encadré : montant reçu + solde du compte
+    doc.setFillColor(243, 250, 246)
+    doc.setDrawColor(208, 232, 219)
+    doc.roundedRect(marge, y, largeur - 2 * marge, 15, 2, 2, 'FD')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(11)
+    doc.setTextColor(0, 122, 80)
+    doc.text(t(`Montant reçu : ${formaterMontant(montant)}`), marge + 4, y + 6)
+    doc.setFontSize(9.5)
+    doc.setTextColor(31, 41, 55)
+    doc.text(t(texteSolde), marge + 4, y + 11.5)
+    y += 19
+
+    // Reçu annulé : mention bien visible
+    if (p.annule) {
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10)
+      doc.setTextColor(200, 30, 30)
+      doc.text(t(`REÇU ANNULÉ le ${formaterDate(p.dateAnnulation)} — motif : ${p.motifAnnulation || ''}`).slice(0, 110), marge, y + 2)
+    }
+
+    // --- Signatures (en bas de la demi-page)
+    const ySig = y0 + 108
+    const colonne = (largeur - 2 * marge) / 2
+    const signatures = [
+      { libelle: 'Le gestionnaire du district', nom: nomPersonne(p.utilisateur) },
+      { libelle: 'Le responsable du centre de santé', nom: p.centre.responsable || '' },
+    ]
+    signatures.forEach((s, i) => {
+      const centre = marge + i * colonne + colonne / 2
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9.5)
+      doc.setTextColor(31, 41, 55)
+      doc.text(s.libelle, centre, ySig, { align: 'center' })
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8.5)
+      doc.setTextColor(0, 122, 80)
+      if (s.nom) doc.text(t(s.nom), centre, ySig + 5, { align: 'center' })
+      doc.setFontSize(7.5)
+      doc.setTextColor(107, 114, 128)
+      doc.text('Signature', centre, ySig + (s.nom ? 9 : 5), { align: 'center' })
+      doc.setDrawColor(190, 190, 190)
+      doc.setLineWidth(0.2)
+      doc.line(centre - 30, ySig + 27, centre + 30, ySig + 27)
+    })
+
+    // --- Pied : date d'édition
+    const maintenant = new Date()
+    doc.setFontSize(7)
+    doc.setTextColor(150, 150, 150)
+    doc.text(
+      `Reçu N° ${t(p.numero)} — édité le ${maintenant.toLocaleDateString('fr-FR')} à ${maintenant.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`,
+      marge,
+      y0 + demiPage - 5,
+    )
+  }
+
+  exemplaire(0, 'Exemplaire DISTRICT')
+  exemplaire(demiPage, 'Exemplaire CENTRE DE SANTÉ')
+
+  // Trait de découpe entre les deux exemplaires
+  doc.setDrawColor(150, 150, 150)
+  doc.setLineWidth(0.3)
+  doc.setLineDashPattern([2, 2], 0)
+  doc.line(4, demiPage, largeur - 4, demiPage)
+  doc.setLineDashPattern([], 0)
+  doc.setFillColor(255, 255, 255)
+  doc.rect(largeur / 2 - 14, demiPage - 2.5, 28, 5, 'F')
+  doc.setFont('helvetica', 'italic')
+  doc.setFontSize(7.5)
+  doc.setTextColor(120, 120, 120)
+  doc.text('Découper ici', largeur / 2, demiPage + 1, { align: 'center' })
+
+  doc.save(`recu_${p.numero}.pdf`)
 }
 
 /** RELEVÉ DE COMPTE d'un centre (PDF). */

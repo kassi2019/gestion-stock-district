@@ -10,9 +10,12 @@
       (quantités calculées, validées ou réduites) -> FenetreFactureGeneree.vue ;
     - « + Facture manuelle » : en cours de mois, produits ajoutés un par un,
       sans rapport -> FenetreFactureManuelle.vue.
+  Nouvelle facture : fenêtre en assistant ① Facture -> ② Paiement -> ③ Terminé
+  (AssistantFacture.vue), sans ouvrir d'autre fenêtre.
   Détail : lignes, paiements imputés, et actions :
     - « Utiliser les avances » : impute les avances disponibles du centre ;
-    - « Enregistrer un paiement » : ouvre Paiements avec le centre et la facture ;
+    - « Enregistrer un paiement » : le formulaire de paiement s'affiche DANS la
+      même fenêtre (FormulairePaiement.vue), puis retour au détail mis à jour ;
     - « Annuler la facture » (motif ; seulement si aucun paiement imputé).
       Facture-sortie : le stock revient au district (refusé si le rapport du
       centre pour ce mois est déjà validé). Ancienne facture : le rapport
@@ -88,7 +91,24 @@
     </div>
 
     <!-- ===================== DÉTAIL D'UNE FACTURE ===================== -->
-    <FenetreModale v-if="detail" :titre="`Facture ${detail.numero} — ${detail.centre.nom}`" tres-large @fermer="detail = null">
+    <FenetreModale v-if="detail" :titre="paiementEnCours ? `Paiement de la facture ${detail.numero} — ${detail.centre.nom}` : `Facture ${detail.numero} — ${detail.centre.nom}`" tres-large @fermer="fermerDetail">
+      <!-- Paiement de la facture, dans la même fenêtre -->
+      <template v-if="paiementEnCours">
+        <div class="encart encart-info">
+          Facture <strong>{{ detail.numero }}</strong> — montant <strong>{{ formaterMontant(detail.montantTotal) }}</strong>,
+          reste à payer <strong>{{ formaterMontant(detail.solde) }}</strong>.
+        </div>
+        <FormulairePaiement
+          ref="formPaiement"
+          id-formulaire="form-paiement-detail"
+          :centre-id="detail.centreId"
+          :facture-cible="detail.id"
+          centre-fixe
+          @enregistre="apresPaiement"
+        />
+      </template>
+
+      <template v-else>
       <div class="bandeau-statut">
         <span class="badge" :class="STATUTS_FACTURE[detail.statut]?.badge">{{ STATUTS_FACTURE[detail.statut]?.libelle }}</span>
         <small v-if="detail.enRetard" class="retard">Échéance dépassée ({{ formaterDate(detail.dateEcheance) }})</small>
@@ -158,7 +178,7 @@
       </div>
       <table v-if="detail.imputations.length" class="tableau lignes">
         <thead>
-          <tr><th>Reçu</th><th>Date</th><th>Mode</th><th>Référence</th><th class="nombre">Montant réglé</th></tr>
+          <tr><th>Reçu</th><th>Date</th><th>Mode</th><th>Référence</th><th class="nombre">Montant réglé</th><th class="actions"></th></tr>
         </thead>
         <tbody>
           <tr v-for="i in detail.imputations" :key="i.id">
@@ -167,13 +187,19 @@
             <td>{{ MODES_PAIEMENT[i.paiement.mode] || i.paiement.mode }}</td>
             <td>{{ i.paiement.reference || '' }}</td>
             <td class="nombre">{{ formaterMontant(i.montant) }}</td>
+            <td class="actions"><button v-si-imprimer type="button" class="bouton-lien" title="Reçu (PDF)" @click="imprimerRecu(i.paiement)">Reçu</button></td>
           </tr>
         </tbody>
       </table>
       <p v-else class="aide">Aucun paiement pour le moment.</p>
+      </template>
 
-      <template #pied>
-        <button class="bouton-secondaire" @click="detail = null">Fermer</button>
+      <template v-if="paiementEnCours" #pied>
+        <button class="bouton-secondaire" type="button" @click="paiementEnCours = false">← Retour à la facture</button>
+        <button type="submit" form="form-paiement-detail" :disabled="formPaiement?.enregistrement">Enregistrer le paiement</button>
+      </template>
+      <template v-else #pied>
+        <button class="bouton-secondaire" @click="fermerDetail">Fermer</button>
         <button v-si-imprimer type="button" class="bouton-secondaire" @click="facturePdf(detail)">Facture (PDF)</button>
         <template v-if="detail.statut !== 'ANNULEE'">
           <button v-if="detail.imputations.length === 0" v-si-modif type="button" class="bouton-danger" :disabled="enregistrement" @click="annuler">Annuler la facture</button>
@@ -199,7 +225,6 @@
 import ChampDate from '@/components/ChampDate.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useStore } from 'vuex'
-import { useRouter } from 'vue-router'
 import FenetreModale from '@/components/FenetreModale.vue'
 import ListeDeroulante from '@/components/ListeDeroulante.vue'
 import ImportExportTableau from '@/components/ImportExportTableau.vue'
@@ -207,19 +232,19 @@ import Pagination from '@/components/Pagination.vue'
 import ColonneTri from '@/components/ColonneTri.vue'
 import FenetreFactureManuelle from './FenetreFactureManuelle.vue'
 import FenetreFactureGeneree from './FenetreFactureGeneree.vue'
+import FormulairePaiement from '@/views/paiements/FormulairePaiement.vue'
 import { utiliserTableau } from '@/utils/pagination'
 import { confirmer, demanderTexte } from '@/utils/alertes'
 import { nomPersonne } from '@/utils/documentPdf'
 import { formaterDate, formaterMontant, formaterNombre } from '@/utils/format'
-import { annulerFacture, imputerAvancesSurFacture, listerFactures, trouverFacture } from '@/api/facturation'
-import { facturePdf, MODES_PAIEMENT, objetFacture, options, ORIGINES_FACTURE, STATUTS_FACTURE } from './financesCommun'
+import { annulerFacture, imputerAvancesSurFacture, listerFactures, trouverFacture, trouverPaiement } from '@/api/facturation'
+import { facturePdf, recuPdf, MODES_PAIEMENT, objetFacture, options, ORIGINES_FACTURE, STATUTS_FACTURE } from './financesCommun'
 
 const props = defineProps({
   /** Ids des factures à mettre en avant / ouvrir (après génération) */
   aOuvrir: { type: Number, default: null },
 })
 const store = useStore()
-const router = useRouter()
 
 const factures = ref([])
 const chargement = ref(false)
@@ -230,6 +255,8 @@ const filtres = reactive({ centreId: null, statut: null, du: '', au: '' })
 const detail = ref(null)
 const nouvelleManuelle = ref(false)
 const nouvelleGeneree = ref(false)
+const paiementEnCours = ref(false) // formulaire de paiement affiché dans la fenêtre « détail »
+const formPaiement = ref(null)
 
 const centres = computed(() => store.state.referentiel.centres)
 const peutModifierPaiements = computed(() => store.getters['auth/peutModifier']('paiements'))
@@ -286,12 +313,16 @@ async function imprimer(f) {
   }
 }
 
-/** Facture (manuelle ou générée) créée : liste rechargée et facture ouverte. */
-async function apresCreation(facture) {
+/** Assistant de facture (facture + paiement) terminé : fenêtre fermée, liste rechargée. */
+async function apresCreation() {
   nouvelleManuelle.value = false
   nouvelleGeneree.value = false
   await charger()
-  detail.value = facture
+}
+
+function fermerDetail() {
+  detail.value = null
+  paiementEnCours.value = false
 }
 
 async function annuler() {
@@ -339,9 +370,29 @@ async function utiliserAvances() {
   }
 }
 
-/** Ouvre le module Paiements avec le centre et la facture pré-sélectionnés. */
+/** Affiche le formulaire de paiement dans la fenêtre du détail. */
 function enregistrerPaiement() {
-  router.push({ path: '/paiements', query: { centre: detail.value.centreId, facture: detail.value.id } })
+  paiementEnCours.value = true
+}
+
+/** Paiement enregistré : retour au détail (mis à jour) de la facture. */
+async function apresPaiement() {
+  paiementEnCours.value = false
+  try {
+    detail.value = await trouverFacture(detail.value.id)
+  } catch (erreur) {
+    store.dispatch('notifications/erreurApi', erreur)
+  }
+  await charger()
+}
+
+/** Reçu PDF d'un paiement de la facture. */
+async function imprimerRecu(p) {
+  try {
+    await recuPdf(await trouverPaiement(p.id))
+  } catch (erreur) {
+    store.dispatch('notifications/erreurApi', erreur)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -427,6 +478,7 @@ defineExpose({ charger })
 .bandeau-statut { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1rem; }
 .encart { margin-bottom: 1rem; padding: 0.65rem 0.9rem; border-radius: 8px; font-size: 0.88rem; }
 .encart-alerte { background: #fdecec; color: #8f1d1d; }
+.encart-info { background: var(--primary-light); color: var(--primary-dark); }
 .fiche { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem 1rem; margin-bottom: 1rem; padding: 0.85rem 1rem; border-radius: 10px; background: #f7faf8; }
 .fiche div { display: flex; flex-direction: column; gap: 0.1rem; }
 .fiche span { font-size: 0.75rem; color: var(--muted); }

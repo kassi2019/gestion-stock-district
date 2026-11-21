@@ -27,8 +27,9 @@
 /**
  * Groupes de modules, dans l'ORDRE D'AFFICHAGE des tuiles de l'accueil.
  * L'ordre suit le circuit de travail du district :
- *   1. Paramétrage  2. Utilisateurs  3. Achats  4. Stock  5. Livraisons
- *   6. Consommations  7. Facturation  8. Paiements  9. Supervisions  10. États
+ *   1. Paramétrage  2. Utilisateurs  3. Réception  4. Stock du dépôt
+ *   5. Rapports centre  6. Facturation  7. Paiements  8. Stock des centres
+ *   9. Supervisions  10. États & rapports
  * ➜ Pour changer l'ordre des tuiles, il suffit de déplacer les blocs ci-dessous.
  */
 export const GROUPES = [
@@ -76,35 +77,22 @@ export const GROUPES = [
     ],
   },
   {
-    titre: 'Centres de santé',
+    titre: 'Centres de santé & finances',
     modules: [
-      {
-        code: 'livraisons',
-        titre: 'Stock des centres',
-        description: 'Stock théorique des centres et anciens bons de livraison',
-        icone: 'camion',
-        couleur: 'principale',
-        vue: () => import('@/views/livraisons/LivraisonsView.vue'),
-      },
       {
         code: 'consommations',
         titre: 'Rapports centre de santé',
         description: 'Consommation mensuelle, stock restant et quantité à livrer',
         icone: 'presse-papier',
-        couleur: 'secondaire',
+        couleur: 'principale',
         vue: () => import('@/views/consommations/ConsommationsView.vue'),
       },
-    ],
-  },
-  {
-    titre: 'Finances',
-    modules: [
       {
         code: 'facturation',
         titre: 'Facturation',
         description: 'Sorties du district vers les centres (rapports et factures manuelles)',
         icone: 'facture',
-        couleur: 'principale',
+        couleur: 'secondaire',
         vue: () => import('@/views/facturation/FacturationView.vue'),
       },
       {
@@ -112,7 +100,7 @@ export const GROUPES = [
         titre: 'Paiements & comptes',
         description: 'Encaissements, avances, reçus et relevés de compte',
         icone: 'portefeuille',
-        couleur: 'secondaire',
+        couleur: 'principale',
         vue: () => import('@/views/paiements/PaiementsView.vue'),
       },
     ],
@@ -120,6 +108,16 @@ export const GROUPES = [
   {
     titre: 'Contrôle & pilotage',
     modules: [
+      // Stock des centres : alimenté par les factures et les rapports validés,
+      // contrôlé par les supervisions -> placé juste avant Supervisions
+      {
+        code: 'livraisons',
+        titre: 'Stock des centres',
+        description: 'Stock théorique des centres et anciens bons de livraison',
+        icone: 'camion',
+        couleur: 'secondaire',
+        vue: () => import('@/views/livraisons/LivraisonsView.vue'),
+      },
       {
         code: 'supervisions',
         titre: 'Supervisions',

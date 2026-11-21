@@ -140,7 +140,7 @@
           <div class="entete-section">
             <h4 class="section">Stock théorique et stock physique</h4>
             <template v-if="!lectureSeule && formulaire.centreId">
-              <button type="button" class="bouton-lien" @click="chargerMedicamentsDuCentre">+ Charger les médicaments du centre ({{ preparation.medicaments.length }})</button>
+              <button type="button" class="bouton-lien" @click="chargerMedicamentsDuCentre()">↻ Recharger les médicaments du centre ({{ preparation.medicaments.length }})</button>
               <button v-si-imprimer type="button" class="bouton-lien" :disabled="!preparation.medicaments.length" @click="imprimerFicheComptage">Fiche de comptage (PDF)</button>
             </template>
             <ImportExportTableau
@@ -391,10 +391,20 @@ async function chargerAgents() {
   }
   formulaire.value?.agents.forEach(rattacherAgent)
 }
-/** Changement de centre : préparation (stock théorique) et personnel du centre. */
-function changerCentre() {
-  chargerPreparation()
+/**
+ * Changement de centre : préparation (stock théorique), personnel du centre,
+ * puis TOUS les médicaments du centre affichés automatiquement dans le
+ * tableau (le superviseur n'a plus qu'à saisir le stock physique).
+ * Les lignes déjà comptées (stock physique saisi) sont gardées ; les lignes
+ * vides de l'ancien centre sont retirées.
+ */
+async function changerCentre() {
   chargerAgents()
+  await chargerPreparation()
+  const f = formulaire.value
+  if (!f || lectureSeule.value) return
+  f.lignes = f.lignes.filter((l) => l.stockPhysique !== null && l.stockPhysique !== '' && l.stockPhysique !== undefined)
+  if (f.centreId) chargerMedicamentsDuCentre(true)
 }
 
 async function ouvrir(s = null) {
@@ -442,12 +452,20 @@ async function chargerPreparation() {
   }
 }
 
-function chargerMedicamentsDuCentre() {
+/**
+ * Ajoute au tableau les médicaments du centre qui n'y sont pas encore.
+ * automatique = true : appelé au choix du centre (pas de message).
+ */
+function chargerMedicamentsDuCentre(automatique = false) {
   const presents = new Set(formulaire.value.lignes.map((l) => l.medicamentId))
   formulaire.value.lignes = formulaire.value.lignes.filter((l) => l.medicamentId)
   const aAjouter = preparation.value.medicaments.filter((m) => m.medicament.actif && !presents.has(m.medicamentId))
   aAjouter.forEach((m) => formulaire.value.lignes.push(nouvelleLigne(m.medicamentId)))
-  if (aAjouter.length === 0) store.dispatch('notifications/succes', 'Tous les médicaments suivis au centre sont déjà dans la liste.')
+  if (automatique && preparation.value.medicaments.length === 0) {
+    store.dispatch('notifications/info', 'Aucun médicament suivi dans ce centre : ajoutez-les avec « + Ajouter un médicament ».')
+  } else if (!automatique && aAjouter.length === 0) {
+    store.dispatch('notifications/succes', 'Tous les médicaments suivis au centre sont déjà dans la liste.')
+  }
 }
 
 function imprimerFicheComptage() {

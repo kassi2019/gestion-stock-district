@@ -765,7 +765,10 @@ async function chargerFiche() {
   color: var(--muted);
   text-align: left;
 }
-.inventaire-lots td { padding: 0.4rem 0.65rem; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+.inventaire-lots td { padding: 0.4rem 0.65rem; font-size: 0.85rem; }
+/* Bordure sur chaque cellule, comme tous les tableaux (style.css) */
+.inventaire-lots th,
+.inventaire-lots td { border: 1px solid #d5dbe0; }
 .inventaire-lots tr.lot-corrige td { background: #fffdf5; }
 .inventaire-lots tr.lot-compte td { background: #f3fbf6; }
 .inventaire-input { width: 90px; padding: 0.3rem 0.5rem; border: 1.5px solid #c8d3cd; border-radius: 6px; }

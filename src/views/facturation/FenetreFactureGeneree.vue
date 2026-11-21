@@ -11,14 +11,17 @@
     3. Le gestionnaire VALIDE ou RÉDUIT chaque quantité (0 = non servi ;
        jamais plus que QaC : pour donner plus, faire une facture manuelle).
     4. Valider = facture créée, stock du district diminué (lots dont la
-       péremption est la plus proche d'abord), impression proposée.
+       péremption est la plus proche d'abord) ; impression à l'étape « Terminé ».
   Une seule facture générée par rapport (sauf si elle est annulée).
 
-  Événements : @fermer ; @creee(facture) -> l'onglet ouvre la facture créée
+  Après validation, la MÊME fenêtre passe au paiement puis au récapitulatif
+  (AssistantFacture.vue : ① Facture -> ② Paiement -> ③ Terminé).
+
+  Événements : @fermer (rien créé) ; @creee(facture) -> fenêtre fermée après création
   =============================================================================
 -->
 <template>
-  <FenetreModale titre="Nouvelle facture générée (à partir du rapport du centre)" tres-large @fermer="emit('fermer')">
+  <AssistantFacture titre="Nouvelle facture générée (à partir du rapport du centre)" :facture="factureCreee" @fermer="emit('fermer')" @termine="(f) => emit('creee', f)">
     <p class="aide">
       Le rapport du mois doit être validé. Les quantités proposées viennent du rapport (quantité à commander,
       limitée au stock du district) : vous pouvez les valider ou les réduire.
@@ -125,23 +128,22 @@
     <template #pied>
       <button class="bouton-secondaire" type="button" @click="emit('fermer')">Annuler</button>
       <button v-si-modif type="button" :disabled="!proposition || !proposition.lignes.length || enregistrement" @click="valider">
-        Valider la facture (sortie de stock)
+        Valider la facture et continuer →
       </button>
     </template>
-  </FenetreModale>
+  </AssistantFacture>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useStore } from 'vuex'
-import FenetreModale from '@/components/FenetreModale.vue'
+import AssistantFacture from './AssistantFacture.vue'
 import ListeDeroulante from '@/components/ListeDeroulante.vue'
 import ImportExportTableau from '@/components/ImportExportTableau.vue'
 import { confirmer } from '@/utils/alertes'
 import { formaterDate, formaterMontant, formaterNombre } from '@/utils/format'
-import { creerFactureGeneree, propositionFactureGeneree, trouverFacture } from '@/api/facturation'
+import { creerFactureGeneree, propositionFactureGeneree } from '@/api/facturation'
 import { libellePeriode, MOIS } from '@/views/consommations/consommationsCommun'
-import { facturePdf } from './financesCommun'
 
 const emit = defineEmits(['fermer', 'creee'])
 const store = useStore()
@@ -153,6 +155,7 @@ const choix = reactive({ centreId: null, annee: precedent.getFullYear(), mois: p
 const optionsMois = MOIS.map((libelle, i) => ({ id: i + 1, libelle }))
 
 const proposition = ref(null)
+const factureCreee = ref(null) // facture validée : l'assistant passe au paiement
 
 /** Export PDF / Excel de la proposition (quantités accordées telles que saisies). */
 const COLONNES_EXPORT = [
@@ -221,12 +224,9 @@ async function valider() {
   enregistrement.value = true
   try {
     const creee = await creerFactureGeneree(proposition.value.rapport.id, lignes.map((l) => ({ medicamentId: l.medicamentId, quantite: Number(l.quantite) || 0 })))
-    const facture = await trouverFacture(creee.id)
-    store.dispatch('notifications/succes', `Facture ${facture.numero} validée : stock du district mis à jour.`)
-    // Impression tout de suite : elle sert de bon de sortie au magasin
-    const imprimer = await confirmer({ titre: `Imprimer la facture ${facture.numero} ?`, texte: 'Pour servir le centre au magasin.', boutonConfirmer: 'Imprimer' })
-    if (imprimer) await facturePdf(facture)
-    emit('creee', facture)
+    store.dispatch('notifications/succes', `Facture ${creee.numero} validée : stock du district mis à jour.`)
+    // Étape suivante (paiement) dans la même fenêtre ; impression à l'étape « Terminé »
+    factureCreee.value = creee
   } catch (erreur) {
     store.dispatch('notifications/erreurApi', erreur)
   } finally {
